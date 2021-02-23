@@ -29,7 +29,7 @@ DEVICE_ID=0
 
 W_EMB_SIZE=100
 L_EMB_SIZE=100
-P_EMB_SIZE=100
+P_EMB_SIZE=500
 POS_ARC_WEIGHT=1.5
 
 NB_EPOCHS=40 #
@@ -46,7 +46,7 @@ BERT_NAME=flaubert/flaubert_base_cased
 for LSTM_H_SIZE in 600 400;
 do for LR in 0.00002 0.00005;
    do for LAB_LOSS_WEIGHT in 0.5 0.4 0.3;
-      do for MLP_ARC_O_SIZE in 600 400; # used for ARC and LAB
+      do for MLP_ARC_O_SIZE in 400; # used for ARC and LAB # 600 is too big
 	 do  for R_BERT_SIZE in 0; # 300;
 	     do for LEX_DROPOUT in 0.3 0.4 0.5;
 		do for EMB_FILE in None $D/vecs100-linear-frwiki ;
