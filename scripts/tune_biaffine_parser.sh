@@ -4,10 +4,10 @@
 
 PROJH=$HOME/Documents/A_PROJETS/GRAPH_PARSER/git/marie-parsing
 # on CLC
-PROJH=/home/mcandito/A_PROJETS/GRAPH_PARSER/git/marie-parsing
+PROJH=/home/mcandito/A_PROJETS/GRAPH_PARSER/github/biaffine-graph-parser
 
 
-D=$PROJH/resources
+D=$PROJH/../../git/marie-parsing/resources
 
 # TREES
 TRAIN_FILE=$D/FRENCH_SPMRL_dep_trees/train.French.predmorph.conll
@@ -35,7 +35,7 @@ POS_ARC_WEIGHT=1.5
 NB_EPOCHS=40 #
 NB_EPOCHS_ARC_ONLY=0
 
-BATCH_SIZE=16
+BATCH_SIZE=12
 
 BERT_NAME=flaubert/flaubert_base_cased
 #BERT_NAME=''
@@ -43,13 +43,13 @@ BERT_NAME=flaubert/flaubert_base_cased
 #set -x
 
 
-for LSTM_H_SIZE in 800 600 400;
+for LSTM_H_SIZE in 600 400;
 do for LR in 0.00002 0.00005;
-   do for LAB_LOSS_WEIGHT in 0.5 0.3;
+   do for LAB_LOSS_WEIGHT in 0.5 0.4 0.3;
       do for MLP_ARC_O_SIZE in 600 400; # used for ARC and LAB
-	 do  for R_BERT_SIZE in 0 300;
+	 do  for R_BERT_SIZE in 0; # 300;
 	     do for LEX_DROPOUT in 0.3 0.4 0.5;
-		do for EMB_FILE in "" $D/vecs100-linear-frwiki ;
+		do for EMB_FILE in None $D/vecs100-linear-frwiki ;
 		   do
 		       timestamp=$(date "+%Y-%m-%d-%H-%M-%S");
 		       O=$PROJH/biaffine_graph_parser/OUTPUT/output-$timestamp;
