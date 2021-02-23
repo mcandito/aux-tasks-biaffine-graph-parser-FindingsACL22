@@ -55,8 +55,8 @@ do for LR in 0.00002 0.00005;
 		       O=$PROJH/../OUTPUT/output-$timestamp;
 		       mkdir $O;
 		       echo $O >> $META_LOG ;
-		       echo python $PROJH/biaffine_graph_parser/train_or_use_parser.py train $TRAIN_FILE $O -g --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --reduced_bert_size $R_BERT_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -i $LAB_LOSS_WEIGHT --pos_arc_weight $POS_ARC_WEIGHT -n $NB_EPOCHS --nb_epochs_arc_only $NB_EPOCHS_ARC_ONLY --device_id $DEVICE_ID --bert_name $BERT_NAME >> $META_LOG ;
-		       python $PROJH/biaffine_graph_parser/train_or_use_parser.py train $TRAIN_FILE $O -g --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --reduced_bert_size $R_BERT_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -i $LAB_LOSS_WEIGHT --pos_arc_weight $POS_ARC_WEIGHT -n $NB_EPOCHS --nb_epochs_arc_only $NB_EPOCHS_ARC_ONLY --device_id $DEVICE_ID --bert_name $BERT_NAME;
+		       echo python $PROJH/train_or_use_parser.py train $TRAIN_FILE $O -g --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --reduced_bert_size $R_BERT_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -i $LAB_LOSS_WEIGHT --pos_arc_weight $POS_ARC_WEIGHT -n $NB_EPOCHS --nb_epochs_arc_only $NB_EPOCHS_ARC_ONLY --device_id $DEVICE_ID --bert_name $BERT_NAME >> $META_LOG ;
+		       python $PROJH/train_or_use_parser.py train $TRAIN_FILE $O -g --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --reduced_bert_size $R_BERT_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -i $LAB_LOSS_WEIGHT --pos_arc_weight $POS_ARC_WEIGHT -n $NB_EPOCHS --nb_epochs_arc_only $NB_EPOCHS_ARC_ONLY --device_id $DEVICE_ID --bert_name $BERT_NAME;
 		   done
 		done
 	     done
