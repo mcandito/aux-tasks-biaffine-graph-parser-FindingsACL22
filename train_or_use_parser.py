@@ -57,7 +57,8 @@ if __name__ == "__main__":
     argparser.add_argument('-c', '--p_emb_size', help='size of POS embeddings. Default=20', type=int, default=20)
     argparser.add_argument('--lstm_h_size', help='size of lstm embeddings. Default=300', type=int, default=300)
     argparser.add_argument('--reduced_bert_size', help='If set to > 0, the bert embeddings will be linearly reduced before concat to non contextual embeddings. Default=0', type=int, default=0)    
-    argparser.add_argument('--mlp_arc_o_size', help='size of mlps after lstm. Default=300', type=int, default=300)
+    argparser.add_argument('--mlp_arc_o_size', help='size of arc mlp after lstm. Default=300', type=int, default=300)
+    argparser.add_argument('--mlp_lab_o_size', help='size of lab mlp after lstm. Default=300', type=int, default=300)
     argparser.add_argument('--bert_name', help='huggingface *bert model name. If not "", will be used as pretrained-LM. Default:flaubert/flaubert_base_cased', default="flaubert/flaubert_base_cased")
     argparser.add_argument('--use_bias', action="store_true", help='Whether to add bias in all internal MLPs. Default=True', default=True)
     argparser.add_argument('-b', '--batch_size', help='batch size. Default=16', type=int, default=16)
@@ -154,6 +155,7 @@ if __name__ == "__main__":
                                         p_emb_size=args.p_emb_size,
                                         lstm_h_size=args.lstm_h_size,
                                         mlp_arc_o_size=args.mlp_arc_o_size, 
+                                        mlp_lab_o_size=args.mlp_lab_o_size, 
                                         use_pretrained_w_emb=use_pretrained_w_emb, 
                                         use_bias=args.use_bias,
                                         bert_name=args.bert_name,
