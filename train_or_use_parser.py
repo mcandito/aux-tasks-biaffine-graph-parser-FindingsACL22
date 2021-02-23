@@ -51,7 +51,7 @@ if __name__ == "__main__":
     argparser.add_argument('-v', '--validation_conll_file', help='pertains only if split_info_file is not provided: validation sentences, will be used to evaluate model during training, and for early stopping')
     argparser.add_argument('--data_name', help='short name of data: ftb or sequoia etc... Default=ftb', default='ftb')
     argparser.add_argument('-g', '--graph_mode', action="store_true", help='If set, Graph version of the parser, otherwise Tree version. Default=True', default=True)
-    argparser.add_argument('-p', '--w_emb_file', help='pre-trained word embeddings file. NB: first line should contain nbwords embedding size', default=None)
+    argparser.add_argument('-p', '--w_emb_file', help='pre-trained word embeddings file. NB: first line should contain nbwords embedding size', default='None')
     argparser.add_argument('-w', '--w_emb_size', help='size of word embeddings. Default=100', type=int, default=100)
     argparser.add_argument('-l', '--l_emb_size', help='size of lemma embeddings. Default=100', type=int, default=100)
     argparser.add_argument('-c', '--p_emb_size', help='size of POS embeddings. Default=20', type=int, default=20)
@@ -127,10 +127,12 @@ if __name__ == "__main__":
             v = eval(load_fn)(args.validation_conll_file, corpus_type='dev')
             sentences['dev'] = v['dev']
                             
-        if args.w_emb_file:
+        if args.w_emb_file != 'None':
             w_emb_file = args.w_emb_file
+            use_pretrained_w_emb = True
         else:
             w_emb_file = None
+            use_pretrained_w_emb = False
 
         # ------------- INDICES ------------------------------
         # indices are defined on train sentences only
@@ -145,10 +147,6 @@ if __name__ == "__main__":
                 data[part] = DepTreeDataSet(part, sentences[part], indices, DEVICE)
 
         # ------------- THE PARSER ---------------------------
-        if args.w_emb_file:
-            use_pretrained_w_emb = True
-        else:
-            use_pretrained_w_emb = False
         biaffineparser = BiAffineParser(indices, DEVICE, 
                                         w_emb_size=args.w_emb_size,
                                         l_emb_size=args.l_emb_size,
