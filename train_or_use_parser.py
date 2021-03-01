@@ -51,7 +51,7 @@ if __name__ == "__main__":
     argparser.add_argument('-v', '--validation_conll_file', help='pertains only if split_info_file is not provided: validation sentences, will be used to evaluate model during training, and for early stopping')
     argparser.add_argument('--data_name', help='short name of data: ftb or sequoia etc... Default=ftb', default='ftb')
     argparser.add_argument('-g', '--graph_mode', action="store_true", help='If set, Graph version of the parser, otherwise Tree version. Default=True', default=True)
-    argparser.add_argument('-p', '--w_emb_file', help='pre-trained word embeddings file. NB: first line should contain nbwords embedding size', default='None')
+    argparser.add_argument('-p', '--w_emb_file', help='If not "None", pre-trained word embeddings file. NB: first line should contain nbwords embedding size', default='None')
     argparser.add_argument('-w', '--w_emb_size', help='size of word embeddings. Default=100', type=int, default=100)
     argparser.add_argument('-l', '--l_emb_size', help='size of lemma embeddings. Default=100', type=int, default=100)
     argparser.add_argument('-c', '--p_emb_size', help='size of POS embeddings. Default=20', type=int, default=20)
@@ -59,7 +59,8 @@ if __name__ == "__main__":
     argparser.add_argument('--reduced_bert_size', help='If set to > 0, the bert embeddings will be linearly reduced before concat to non contextual embeddings. Default=0', type=int, default=0)    
     argparser.add_argument('--mlp_arc_o_size', help='size of arc mlp after lstm. Default=300', type=int, default=300)
     argparser.add_argument('--mlp_lab_o_size', help='size of lab mlp after lstm. Default=300', type=int, default=300)
-    argparser.add_argument('--bert_name', help='huggingface *bert model name. If not "", will be used as pretrained-LM. Default:flaubert/flaubert_base_cased', default="flaubert/flaubert_base_cased")
+    argparser.add_argument('--bert_name', help='huggingface *bert model name. If not "None", will be used as pretrained-LM. Default:flaubert/flaubert_base_cased', default="flaubert/flaubert_base_cased")
+    argparser.add_argument('-f', '--freeze_bert', action="store_true", help='Whether to freeze *bert parameters. Default=False', default=False)
     argparser.add_argument('--use_bias', action="store_true", help='Whether to add bias in all internal MLPs. Default=True', default=True)
     argparser.add_argument('-b', '--batch_size', help='batch size. Default=16', type=int, default=16)
     argparser.add_argument('-e', '--early_stopping', action="store_true", help='if set, training will stop as soon as validation loss increases. Note that IN ANY CASE, THE SAVED MODEL will be that with MINIMUM LOSS on validation set, early stopping is just to use if training should be stopped at the first loss increase. Default=True', default=True)
@@ -99,10 +100,11 @@ if __name__ == "__main__":
     logstream = open(args.model_dir+'/log', 'w')
     model_file = args.model_dir+'/model'
 
-    if args.bert_name:
+    if args.bert_name != 'None':
       bert_tokenizer = AutoTokenizer.from_pretrained(args.bert_name)
     else:
       bert_tokenizer = None
+      args.bert_name = None
 
     # train model on train data and check performance on validation set
     if args.mode == 'train':
@@ -157,7 +159,9 @@ if __name__ == "__main__":
                                         use_pretrained_w_emb=use_pretrained_w_emb, 
                                         use_bias=args.use_bias,
                                         bert_name=args.bert_name,
-                                        reduced_bert_size=args.reduced_bert_size)
+                                        reduced_bert_size=args.reduced_bert_size,
+                                        freeze_bert=args.freeze_bert,
+        )
 
         # pour tests plus rapides: utiliser training sur val
         #train_data = data['val'] # data['train']
