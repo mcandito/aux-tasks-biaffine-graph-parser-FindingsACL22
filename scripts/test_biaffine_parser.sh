@@ -24,7 +24,7 @@ timestamp=$(date "+%Y-%m-%d-%H-%M-%S")
 O=$PROJH/../OUTPUT/output-$timestamp
 mkdir $O
 
-DEVICE_ID=0
+DEVICE_ID=2
 
 EMB_FILE=$D/vecs100-linear-frwiki
 W_EMB_SIZE=100
