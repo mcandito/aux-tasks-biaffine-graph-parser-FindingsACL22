@@ -6,6 +6,7 @@ from data import *
 import numpy as np
 import torch
 from random import random
+import copy
 
 class Indices:
    
@@ -138,9 +139,15 @@ class Indices:
       Output: the token, with ids potentially replaced by IUNK  
       """
       # independent dropout of w / l / p
+      #@@ DEBUG
+      nitok = copy.deepcopy(itok)
+      r = False
       for i in [0,1,2]:
         if random() < dropout_rate:
-          itok[i] = DROP_ID #UNK_ID
+          nitok[i] = DROP_ID #UNK_ID
+          r = True
+      if r:
+          return nitok
       return itok
 
     def lex_dropout_isentences(self, isentences, dropout_rate):
@@ -181,7 +188,7 @@ class Indices:
                 self.iw2emb.append(np.zeros(self.w_emb_size))
         
         line = instream.readline()
-        i = len(self.vocabs['w']['i2s'])
+        i = len(self.vocabs['w']['i2s']) - 1
         while line:
             i += 1
             line = line[:-1].strip() # trailing space

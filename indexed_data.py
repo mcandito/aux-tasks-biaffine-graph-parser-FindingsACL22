@@ -170,9 +170,19 @@ class DepDataSet:
         """
         # nodrop_isentences is None iff the sentences have never undergone dropout yet
         if self.nodrop_isentences == None:
-          self.nodrop_isentences = self.isentences
+          #@@ DEBUG
+          #@@self.nodrop_isentences = self.isentences
+          self.nodrop_isentences = copy.deepcopy(self.isentences)
         # should be applicable several times  (application on nodrop_isentences)
         self.isentences = self.indices.lex_dropout_isentences(self.nodrop_isentences, lex_dropout_rate)
+        
+        #@@ check actual drop ratio
+        #actual = sum( [sum([ int(x[0] == DROP_ID) for x in sent]) for sent in self.isentences])
+        #total = sum( [len(sent) for sent in self.isentences])
+        #nodrop = sum( [sum([ int(x[0] == DROP_ID) for x in sent]) for sent in self.nodrop_isentences])
+        #total_nodrop = sum( [len(sent) for sent in self.nodrop_isentences])
+        #print("check actual drop ratio", actual/total, nodrop/total_nodrop )
+
 
 """## DepTreeDataSet"""
 
