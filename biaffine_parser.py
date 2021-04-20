@@ -297,21 +297,17 @@ mlp_lab_o_size = 400
             else:
               lab_loss = 0
 
-            
-            # --- Evaluation --------------------------
-            # unlabeled
+
+            # --- Prediction --------------------------
             with torch.no_grad():
-              pred_arcs = (S_arc > 0).int() * pad_masks  # b, h, d
-              nb_correct_u = torch.sum((pred_arcs * arc_adja).int()).item()
-              nb_gold = torch.sum(arc_adja).item()
-              nb_pred = torch.sum(pred_arcs).item()
-              if lab_loss_weight > 0:
-                # labeled
-                pred_labels = torch.argmax(S_lab, dim=1) # for all arcs (not only the predicted arcs)
-                # count correct labels for the predicted arcs only
-                nb_correct_u_and_l = torch.sum((pred_labels == lab_adja).float() * pred_arcs).item()
-              else:
-                nb_correct_u_and_l = 0
+                pred_arcs = (S_arc > 0).int() * pad_masks  # b, h, d
+                if lab_loss_weight > 0:
+                    pred_labels = torch.argmax(S_lab, dim=1)   # for all arcs (not only the predicted arcs)
+                else:
+                    pred_labels = None
+
+            # --- Evaluation --------------------------
+            nb_gold, nb_pred, nb_correct_u, nb_correct_u_and_l = self.evaluate_graph_mode(batch, pred_arcs, pred_labels)
             
         # tree mode
         else:
@@ -329,7 +325,7 @@ mlp_lab_o_size = 400
               g_heads = torch.flatten(heads)                                          # [b, d] = gold h => [b * d] = gold h
               arc_loss = self.ce_loss_fn_arc(s_heads, g_heads) # ignore -1 gold values (padded)
 
-            # Predicted heads: 
+            # Predicted heads (needed for label loss: consider label scores of predicted heads)
             #    here simply predict head with max score, no MST, no cycle checking...
             pred_heads = torch.argmax(S_arc, dim=1) # [b, h, d ] ==> [b, d] = predicted head for d
 
@@ -343,23 +339,14 @@ mlp_lab_o_size = 400
             #   - unsqueeze : add dim for gold head (size 1)
             if lab_loss_weight > 0:
               num_labels = S_lab.shape[1]
-              ##g_heads = heads.unsqueeze(1).repeat(1,num_labels,1).unsqueeze(2)
-              #g_heads = heads.unsqueeze(1).expand(-1,num_labels,-1).unsqueeze(2)
-              ## but g_heads contain -1 values (PAD_HEAD_RK) as head id of padded dep tokens
-              ## ==> turn -1 values into 0
-              ## ==> anyway these will be ignored in lab_loss (cf. gold label of padded dep tokens == PAD_ID == 0)
-              #pad_mask = (g_heads != PAD_HEAD_RK).int()
-              #g_heads = g_heads * pad_mask
-              ## gather     ==> a[b, l, h, d] = S_lab[b, l, g_heads[b,l,h,d], d]
-              ## squeeze(2) ==> a[b, l, d] score of label l for gold head of d
-              ## transpose(-2,-1) ==> a[b, d, l]
-              #s_labels = torch.gather(S_lab,2,g_heads).squeeze(2).transpose(-2,-1)
+              ## OBS g_heads = heads.unsqueeze(1).repeat(1,num_labels,1).unsqueeze(2)
 
-              # Predicted label scores of PREDICTED heads: 
+              # Predicted label scores of PREDICTED heads (dozat et al. 2017):
+              # TODO: try to use predicted label for GOLD heads
               #    prepare pred_heads to serve as index for gather
-              #    [b, d] = pred h => [b, 1, d] => [b, l, d] => [b, l, h, d] = pred h
+              #    [b, d] = pred h => [b, 1, d] => [b, l, d] => [b, l, 1, d] = pred h
               i_pred_heads = pred_heads.unsqueeze(1).expand(-1,num_labels,-1).unsqueeze(2) 
-              # gather     ==> s_labels[b, l, h, d] = S_lab[b, l, i_pred_heads[b,l,h,d], d]
+              # gather     ==> s_labels[b, l, h, d] = S_lab[b, l, i_pred_heads[b,l,1,d], d]
               # squeeze(2) ==> a[b, l, d] score of label l for gold head of d
               # transpose(-2,-1) ==> a[b, d, l]
               s_labels = torch.gather(S_lab,2,i_pred_heads).squeeze(2).transpose(-2,-1)
@@ -373,34 +360,21 @@ mlp_lab_o_size = 400
               g_labels_flat = torch.flatten(labels)
             
               lab_loss = self.ce_loss_fn_label(s_labels_flat, g_labels_flat) # cells with PAD_ID=0 gold label will be ignored
+
+              # --- Predicted labels -------------------
+              with torch.no_grad():
+                  # Predicted labels for the predicted arcs:
+                  #  reuse s_labels : [b, d, l] predicted label scores of predicted heads
+                  pred_labels = torch.argmax(s_labels, dim = 2)
+
             else:
               lab_loss = 0
+              pred_labels = None
+
 
             # --- Evaluation -------------------------
-            with torch.no_grad():
-            
-              pad_mask = (heads != PAD_HEAD_RK).float()
-              nb_gold = torch.sum(pad_mask).item()
-              nb_pred = nb_gold
-              correct_u = (pred_heads == heads).int() * pad_mask
-              nb_correct_u = torch.sum(correct_u).item()
+            nb_gold, nb_pred, nb_correct_u, nb_correct_u_and_l = self.evaluate_tree_mode(batch, pred_heads, pred_labels)
 
-              if lab_loss_weight > 0:
-                # Predicted labels for the predicted arcs:
-                #  reuse s_labels : [b, d, l] predicted label scores of predicted heads
-                pred_labels = torch.argmax(s_labels, dim = 2)
-
-                # NB: count correct labels only for deps whose head is correctly predicted
-                nb_correct_u_and_l = torch.sum((pred_labels == labels).int() * correct_u).item()
-                if nb_correct_u_and_l > nb_correct_u:
-                  print("BUG! correct_l %d > correct_u %d (nb_gold=%d)")
-                  torch.save(S_arc, 'debug_S_arc.save')
-                  torch.save(S_lab, 'debug_S_lab.save')
-                  torch.save(heads, 'debug_heads.save')
-                  torch.save(labels, 'debug_labels.save')
-                  
-              else:
-                nb_correct_u_and_l = 0
         a = 1 - lab_loss_weight
         l = lab_loss_weight
         # loss balancing : reduce weight for already well-performing task (loss a lot smaller than for first batch)
@@ -427,6 +401,7 @@ mlp_lab_o_size = 400
         self.batch_size = batch_size
         self.beta1 = 0.9
         self.beta2 = 0.9
+        self.lab_loss_weight = lab_loss_weight
         #optimizer = optim.SGD(biaffineparser.parameters(), lr=LR)
         #optimizer = optim.Adam(self.parameters(), lr=lr, betas=(0., 0.95), eps=1e-09)
         optimizer = optim.Adam(self.parameters(), lr=lr, betas=(self.beta1, self.beta2), eps=1e-09)
@@ -655,3 +630,177 @@ mlp_lab_o_size = 400
           outstream.write("# pos_arc_weight : %s\n" %(str(self.pos_arc_weight)))
           
         outstream.write("\n")
+
+    def evaluate_tree_mode(self, batch, pred_heads, pred_labels):
+        """
+        Evaluate predicted trees for a batch
+        pred_heads  : [b, d] = predicted head rk (redundant with pred_labels...)
+        pred_labels : [b, d] = label id 
+        """
+        with torch.no_grad():
+            lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, heads, labels = batch
+
+            pad_mask = (heads != PAD_HEAD_RK).float()
+            nb_gold = torch.sum(pad_mask).item()
+            nb_pred = nb_gold
+            correct_u = (pred_heads == heads).int() * pad_mask
+            nb_correct_u = torch.sum(correct_u).item()
+
+            if pred_labels != None:
+                # NB: count correct labels only for deps whose head is correctly predicted
+                nb_correct_u_and_l = torch.sum((pred_labels == labels).int() * correct_u).item()
+                # for debugging...
+                if nb_correct_u_and_l > nb_correct_u:
+                    print("BUG! correct_l %d > correct_u %d (nb_gold=%d)")
+                    torch.save(S_arc, 'debug_S_arc.save')
+                    torch.save(S_lab, 'debug_S_lab.save')
+                    torch.save(heads, 'debug_heads.save')
+                    torch.save(labels, 'debug_labels.save')
+                  
+            else:
+                nb_correct_u_and_l = 0
+        return nb_gold, nb_pred, nb_correct_u, nb_correct_u_and_l
+
+    def evaluate_graph_mode(self, batch, pred_arcs, pred_labels):
+        """
+        pred_arcs   : [b, h, d ] = 0 if padded or not predicted, 1 otherwise
+        pred_labels : [b, h, d ] = label id (0 if padded)
+        Caution: pred_labels contains prediction for all arcs, not only for the predicted ones
+        """
+        lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja = batch
+
+        with torch.no_grad():
+            # unlabeled
+            nb_correct_u = torch.sum((pred_arcs * arc_adja).int()).item()
+            nb_gold = torch.sum(arc_adja).item()
+            nb_pred = torch.sum(pred_arcs).item()
+            if pred_labels != None:
+                # labeled
+                # count correct labels for the predicted arcs only
+                nb_correct_u_and_l = torch.sum((pred_labels == lab_adja).float() * pred_arcs).item()
+            else:
+                nb_correct_u_and_l = 0
+        return nb_gold, nb_pred, nb_correct_u, nb_correct_u_and_l
+    
+
+    def predict_and_evaluate(self, graph_mode, test_data, log_stream, out_file=None):
+        """ predict on test data and evaluate 
+        if out_file is set, prediction will be dumped in readable format in out_file
+        """
+        
+        tot_nb_correct_u = 0
+        tot_nb_correct_l = 0
+        tot_nb_pred = 0
+        tot_nb_gold = 0
+
+        if out_file != None:
+            out_stream = open(out_file, 'w')
+            
+        self.eval()
+        with torch.no_grad():
+            for batch in test_data.make_batches(self.batch_size, sort_dec_length=True):
+                if graph_mode:
+                    # forward 
+                    lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja = batch
+                    S_arc, S_lab = self(forms, lemmas, tags, bert_tokens, bert_ftid_rkss, pad_masks, lengths=lengths)
+
+                    # prediction
+                    pred_arcs = (S_arc > 0).int() * pad_masks  # b, h, d
+                    pred_labels = torch.argmax(S_lab, dim=1) # for all arcs (not only the predicted arcs)
+
+                    # evaluation
+                    nb_gold, nb_pred, nb_correct_u, nb_correct_u_and_l = self.evaluate_graph_mode(batch, pred_arcs, pred_labels)
+                # tree mode
+                else:
+                    # forward
+                    lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, heads, labels = batch
+                    S_arc, S_lab = self(forms, lemmas, tags, bert_tokens, bert_ftid_rkss, pad_masks, lengths=lengths)
+
+                    # Predicted heads
+                    #    here simply predict head with max score, no MST, no cycle checking...
+                    pred_heads = torch.argmax(S_arc, dim=1) # [b, h, d ] ==> [b, d] = predicted head for d
+            
+                    # Predicted labels for the predicted arcs (see comments in batch_forward_and_loss)
+                    num_labels = S_lab.shape[1]
+                    i_pred_heads = pred_heads.unsqueeze(1).expand(-1,num_labels,-1).unsqueeze(2) 
+                    s_labels = torch.gather(S_lab,2,i_pred_heads).squeeze(2).transpose(-2,-1)
+                    pred_labels = torch.argmax(s_labels, dim = 2)
+                
+                    # evaluation
+                    nb_gold, nb_pred, nb_correct_u, nb_correct_u_and_l = self.evaluate_tree_mode(batch, pred_heads, pred_labels)
+                    
+                tot_nb_correct_u += nb_correct_u
+                tot_nb_correct_l += nb_correct_u_and_l
+                tot_nb_pred += nb_pred
+                tot_nb_gold += nb_gold
+
+                if out_file:
+                    if graph_mode:
+                        self.dump_predictions_graph_mode(batch, pred_arcs, pred_labels, out_stream)
+                    else:
+                        self.dump_predictions_tree_mode(batch, pred_heads, pred_labels, out_stream)
+                        
+
+        if out_stream:
+            out_stream.close()
+        
+        return tot_nb_gold, tot_nb_pred, tot_nb_correct_u, tot_nb_correct_l
+
+                    
+    def dump_predictions_tree_mode(self, batch, pred_heads, pred_labels, out_stream):
+        """ dump gold and predictions into file """
+        lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, heads, labels = batch
+        
+        (batch_size, n) = forms.size() 
+
+        for b in range(batch_size):     # sent in batch
+            for d in range(n):          # tok in sent
+                if forms[b,d] == PAD_ID:
+                    break
+                out = [str(d+1), self.indices.i2s('w', forms[b,d])]
+                # gold head / label
+                out.append(str( heads[b,d].item() + 1 ))
+                out.append(self.indices.i2s('label', labels[b,d]))
+
+                out_stream.write('\t'.join(out) + '\n')
+
+            out_stream.write('\n')
+
+    def dump_predictions_graph_mode(self, batch, pred_arcs, pred_labels, out_stream):
+        """ dump gold and predictions into file """
+        lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja = batch
+
+        (batch_size, n) = forms.size() 
+
+        for b in range(batch_size):     # sent in batch
+            for d in range(n):          # tok in sent
+                if forms[b,d] == PAD_ID:
+                    break
+                out = [str(d+1), self.indices.i2s('w', forms[b,d])]
+                # gold head / label pairs for dependent d
+                pairs = [ (h, lab_adja[b,h,d]) for h in range(n) if lab_adja[b,h,d] != 0 ] # PAD_ID or no arc == 0
+                if len(pairs):
+                    ghs, gls = zip(*pairs)
+                    out.append('|'.join( [ str(x+1) for x in ghs ] ))
+                    out.append('|'.join( [ self.indices.i2s('label', l) for l in gls ] ))
+                else:
+                    out.append('_')
+                    out.append('_')
+
+                # predicted head / label pairs for dependent d, for predicted arcs only
+                pairs = [ (h, pred_labels[b,h,d]) for h in range(n) if pred_arcs[b,h,d] != 0 ]
+                if len(pairs):
+                    phs, pls = zip(*pairs)
+                    out.append('|'.join( [ str(x+1) for x in phs ] ))
+                    out.append('|'.join( [ self.indices.i2s('label', l) for l in pls ] ))
+                else:
+                    out.append('_')
+                    out.append('_')
+                    
+                out_stream.write('\t'.join(out) + '\n')
+
+            out_stream.write('\n')
+
+
+            
+        

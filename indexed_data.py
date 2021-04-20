@@ -4,7 +4,7 @@ from random import shuffle
 import numpy as np
 from data import *
 import torch
-
+import copy
 
 class DepDataSet:
     def __init__(self, corpus_type, sentences, indices, device):

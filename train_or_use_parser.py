@@ -73,6 +73,7 @@ if __name__ == "__main__":
     argparser.add_argument('--nb_epochs_arc_only', help='Nb epocs to run using arc loss only. Default=0', type=int, default=0)
     argparser.add_argument('--device_id', help='GPU cuda device id. Default=0', type=int, default=0)
     argparser.add_argument('-t', '--trace', action="store_true", help='print some traces. Default=False', default=False)
+    argparser.add_argument('--out_parsed_file', help='Pertains in test mode only. If set to non None, filename into which predictions will be dumped', default=None)
     args = argparser.parse_args()
 
 
@@ -97,7 +98,6 @@ if __name__ == "__main__":
         print('No GPU available, using the CPU instead.')
         DEVICE = torch.device("cpu")
 
-    logstream = open(args.model_dir+'/log', 'w')
     model_file = args.model_dir+'/model'
 
     if args.bert_name != 'None':
@@ -168,6 +168,7 @@ if __name__ == "__main__":
         train_data = data['train']
         val_data = data['dev']
 
+        logstream = open(args.model_dir+'/log_train', 'w')
 
         biaffineparser.train_model(train_data, val_data, args.data_name, model_file, logstream,
                                    args.nb_epochs,
@@ -205,13 +206,22 @@ if __name__ == "__main__":
     # parsing mode
     else:
         sys.stderr.write("Parsing %s with %s ...\n" % (args.conll_file, model_file))
-        biaffine_parser = torch.load(model_file)
-        sys.stderr.write("loaded model %s, nb epochs=%d\n" % (model_file, classifier.current_nb_epochs))
-        indices = biaffine_parser.indices
+        parser = torch.load(model_file)
+        sys.stderr.write("loaded model %s\n" % (model_file))
+        indices = parser.indices
         if args.graph_mode:
             sentences = load_dep_graphs(args.conll_file, corpus_type='toparse')
-            dataset = DepGraphDataSet('toparse', sentences[part], indices, DEVICE)
+            dataset = DepGraphDataSet('toparse', sentences['toparse'], indices, DEVICE)
+            
         else:
             sentences = load_dep_trees(args.conll_file, corpus_type='toparse')
-            dataset = DepGraphDataSet('toparse', sentences[part], indices, DEVICE)
-        # TODO parsing mode
+            dataset = DepTreeDataSet('toparse', sentences['toparse'], indices, DEVICE)
+            
+        sys.stderr.write("parsing and evaluating conll file %s\n" % args.conll_file)
+
+        logstream = open(args.model_dir+'/log_parse', 'w')
+        
+        nb_gold, nb_pred, nb_correct_u, nb_correct_l = parser.predict_and_evaluate(args.graph_mode, dataset, logstream, out_file=args.out_parsed_file)
+        for stream in [sys.stderr, logstream]:
+          stream.write("Fscore U = %5.2f on %s\n" %(fscore(nb_correct_u, nb_gold, nb_pred), args.conll_file))
+          stream.write("Fscore L = %5.2f on %s\n" %(fscore(nb_correct_l, nb_gold, nb_pred), args.conll_file))
