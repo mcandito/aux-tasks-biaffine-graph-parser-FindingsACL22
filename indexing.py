@@ -209,7 +209,7 @@ class Indices:
             emb_size = len(self.iw2emb[-1])
             self.vocabs['w']['i2s'] += additional_forms
             for i, form in enumerate(additional_forms):
-                self.vocabs['w']['s2i'] = last + i
+                self.vocabs['w']['s2i'][form] = last + i
                 # random vector between -1 and 1  (b-a)*sample -a
                 self.iw2emb.append( 2 * np.random.random(emb_size) - 1 )
 
