@@ -23,6 +23,13 @@ def fscore(nb_correct, nb_gold, nb_pred):
     p = nb_correct / nb_pred
     return 100*2*r*p/(p+r)
 
+def rec_prec_fscore(nb_correct, nb_gold, nb_pred):
+    if (nb_correct * nb_gold * nb_pred == 0):
+        return 0
+    r = nb_correct / nb_gold
+    p = nb_correct / nb_pred
+    return 100*r, 100*p, 100*2*r*p/(p+r)
+
 class BiAffineParser(nn.Module):
     """
 dozat and manning 2018 hyperparameters: (table 2 p4)
@@ -782,24 +789,26 @@ mlp_lab_o_size = 400
                     break
                 out = [str(d+1), self.indices.i2s('w', forms[b,d])]
                 # gold head / label pairs for dependent d
-                pairs = [ (h, lab_adja[b,h,d]) for h in range(n) if lab_adja[b,h,d] != 0 ] # PAD_ID or no arc == 0
-                if len(pairs):
-                    ghs, gls = zip(*pairs)
-                    out.append('|'.join( [ str(x+1) for x in ghs ] ))
-                    out.append('|'.join( [ self.indices.i2s('label', l) for l in gls ] ))
-                else:
-                    out.append('_')
-                    out.append('_')
-
+                gpairs = [ [h, lab_adja[b,h,d]] for h in range(n) if lab_adja[b,h,d] != 0 ] # PAD_ID or no arc == 0
                 # predicted head / label pairs for dependent d, for predicted arcs only
-                pairs = [ (h, pred_labels[b,h,d]) for h in range(n) if pred_arcs[b,h,d] != 0 ]
-                if len(pairs):
-                    phs, pls = zip(*pairs)
-                    out.append('|'.join( [ str(x+1) for x in phs ] ))
-                    out.append('|'.join( [ self.indices.i2s('label', l) for l in pls ] ))
-                else:
-                    out.append('_')
-                    out.append('_')
+                ppairs = [ [h, pred_labels[b,h,d]] for h in range(n) if pred_arcs[b,h,d] != 0 ]
+
+                # marquage bruit / silence
+                for pair in gpairs:
+                    if pair not in ppairs:
+                        pair[1] = 'SIL:' + pair[1]
+                for pair in ppairs:
+                    if pair not in gpairs:
+                        pair[1] = 'NOI:' + pair[1]
+
+                for pairs in [gpairs, ppairs]:
+                    if len(pairs):
+                        hs, ls = zip(*pairs)
+                        out.append('|'.join( [ str(x+1) for x in hs ] ))
+                        out.append('|'.join( [ self.indices.i2s('label', l) for l in ls ] ))
+                    else:
+                        out.append('_')
+                        out.append('_')
                     
                 out_stream.write('\t'.join(out) + '\n')
 
