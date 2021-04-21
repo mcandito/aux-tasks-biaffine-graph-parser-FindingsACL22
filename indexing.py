@@ -37,8 +37,8 @@ class Indices:
         if w_emb_file is not None:
             # add indices for special symbols only: calling index_new_vocab with an empty sequence of tokens
             self.index_new_vocab('w', [], add_pad=True, add_unk=True)
-            # and then for known embeddings
-            self.load_embeddings_from_scratch(w_emb_file)
+            # and then for known embeddings + additional known forms
+            self.load_embeddings_from_scratch(w_emb_file, additional_forms=set(forms))
         else:
             self.index_new_vocab('w', forms, add_pad=True, add_unk=True)
             self.iw2emb = None
@@ -157,7 +157,7 @@ class Indices:
       """
       return [ [ self.lex_dropout_itok(itok, dropout_rate) for itok in sent ] for sent in isentences ]
      
-    def load_embeddings_from_scratch(self, embeddings_file):
+    def load_embeddings_from_scratch(self, embeddings_file, additional_forms=None):
         """
         Loads txt file containing lexical (non-contextual) embeddings 
         @param embeddings_file: vectors associated to words (or strings)
@@ -200,6 +200,19 @@ class Indices:
             self.iw2emb.append(vect)
             
             line = instream.readline()
+
+        # if additional sentences were provided
+        if additional_forms:
+            # get the forms that have no pretrained embedding
+            additional_forms = list(additional_forms.difference(self.vocabs['w']['s2i'].keys()))
+            last = len(self.vocabs['w']['i2s']) # current size of vocab
+            emb_size = len(self.iw2emb[-1])
+            self.vocabs['w']['i2s'] += additional_forms
+            for i, form in enumerate(additional_forms):
+                self.vocabs['w']['s2i'] = last + i
+                # random vector between -1 and 1  (b-a)*sample -a
+                self.iw2emb.append( 2 * np.random.random(emb_size) - 1 )
+
             
         self.w_emb_matrix = torch.tensor(self.iw2emb).float()
         print("Pretrained word embeddings shape:", self.w_emb_matrix.shape)
