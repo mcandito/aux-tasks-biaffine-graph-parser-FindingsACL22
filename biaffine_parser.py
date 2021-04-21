@@ -805,7 +805,7 @@ mlp_lab_o_size = 400
                     if len(pairs):
                         hs, ls = zip(*pairs)
                         out.append('|'.join( [ str(x+1) for x in hs ] ))
-                        out.append('|'.join( ls ) #[ self.indices.i2s('label', l) for l in ls ] ))
+                        out.append('|'.join( ls )) #[ self.indices.i2s('label', l) for l in ls ] ))
                     else:
                         out.append('_')
                         out.append('_')
