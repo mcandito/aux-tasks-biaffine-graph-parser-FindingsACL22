@@ -612,9 +612,9 @@ mlp_lab_o_size = 400
 
     def log_best_perf(self, outstream, epoch, f_u, f_l):
         # see build_log_suff for the headings
-        s = '\t'.join( [ 'RESULT', "%5.2f" % f_u, "%5.2f" % f_l, str(epoch) ] ) + '\t' + self.log_values_suff
-
         outstream.write(self.log_heading_suff)
+        
+        s = '\t'.join( [ 'RESULT', "%5.2f" % f_u, "%5.2f" % f_l, str(epoch) ] ) + '\t' + self.log_values_suff
         outstream.write(s)
         
           
@@ -627,8 +627,13 @@ mlp_lab_o_size = 400
             self.log_values_suff = 'tree\t' 
         l = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size','mlp_arc_o_size','mlp_arc_dropout', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'nb_epochs_arc_only', 'lab_loss_weight', 'lex_dropout', 'pos_arc_weight']
 
+        l_strs = [ str(self.__dict__[f]) for f in l ]
+        config_str = '_'.join(l_strs) # get a compact name for the hyperparameter config
+        l_strs = [config_str] + l_strs
+        l = ['config_str'] + l
+
         self.log_heading_suff += '\t' + '\t'.join( l ) + '\n'
-        self.log_values_suff += '\t'.join ( [ str(self.__dict__[h]) for h in l ] ) + '\n'
+        self.log_values_suff += '\t'.join (l_strs) + '\n'
 
 
     def log_train_hyper(self, outstream):
@@ -786,14 +791,16 @@ mlp_lab_o_size = 400
         # whether sentences in batch start with a dummy root token or not
         root_form_id = self.indices.s2i('w', ROOT_FORM)
         if forms[0,0] == root_form_id:
-            shift = 1
+            start = 1
+            add = 0
         else:
-            shift = 0
+            start = 0
+            add = 1
         for b in range(batch_size):     # sent in batch
-            for d in range(shift, n):   # tok in sent (skiping root token)
+            for d in range(start, n):   # tok in sent (skiping root token)
                 if forms[b,d] == PAD_ID:
                     break
-                out = [str(d+shift), self.indices.i2s('w', forms[b,d])] 
+                out = [str(d+add), self.indices.i2s('w', forms[b,d])] 
                 # gold head / label pairs for dependent d
                 gpairs = [ [h, self.indices.i2s('label', lab_adja[b,h,d])] for h in range(n) if lab_adja[b,h,d] != 0 ] # PAD_ID or no arc == 0
                 # predicted head / label pairs for dependent d, for predicted arcs only
@@ -810,7 +817,7 @@ mlp_lab_o_size = 400
                 for pairs in [gpairs, ppairs]:
                     if len(pairs):
                         hs, ls = zip(*pairs)
-                        out.append('|'.join( [ str(x+shift) for x in hs ] ))
+                        out.append('|'.join( [ str(x+add) for x in hs ] ))
                         out.append('|'.join( ls )) #[ self.indices.i2s('label', l) for l in ls ] ))
                     else:
                         out.append('_')
