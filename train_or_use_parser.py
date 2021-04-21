@@ -223,5 +223,7 @@ if __name__ == "__main__":
         
         nb_gold, nb_pred, nb_correct_u, nb_correct_l = parser.predict_and_evaluate(args.graph_mode, dataset, logstream, out_file=args.out_parsed_file)
         for stream in [sys.stderr, logstream]:
-          stream.write("U R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % rec_prec_fscore(nb_correct_u, nb_gold, nb_pred), args.conll_file)
-          stream.write("L R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % rec_prec_fscore(nb_correct_l, nb_gold, nb_pred), args.conll_file)
+          r, p, f = rec_prec_fscore(nb_correct_u, nb_gold, nb_pred)
+          stream.write("U R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % (r, p, f, args.conll_file))
+          r, p, f = rec_prec_fscore(nb_correct_l, nb_gold, nb_pred)
+          stream.write("L R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % (r, p, f, args.conll_file))
