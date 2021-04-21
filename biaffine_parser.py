@@ -783,11 +783,17 @@ mlp_lab_o_size = 400
 
         (batch_size, n) = forms.size() 
 
+        # whether sentences in batch start with a dummy root token or not
+        root_form_id = self.indices.s2i('w', ROOT_FORM)
+        if forms[0,0] == root_form_id:
+            shift = 1
+        else:
+            shift = 0
         for b in range(batch_size):     # sent in batch
-            for d in range(n):          # tok in sent
+            for d in range(shift, n):   # tok in sent (skiping root token)
                 if forms[b,d] == PAD_ID:
                     break
-                out = [str(d+1), self.indices.i2s('w', forms[b,d])]
+                out = [str(d+shift), self.indices.i2s('w', forms[b,d])] 
                 # gold head / label pairs for dependent d
                 gpairs = [ [h, self.indices.i2s('label', lab_adja[b,h,d])] for h in range(n) if lab_adja[b,h,d] != 0 ] # PAD_ID or no arc == 0
                 # predicted head / label pairs for dependent d, for predicted arcs only
@@ -804,7 +810,7 @@ mlp_lab_o_size = 400
                 for pairs in [gpairs, ppairs]:
                     if len(pairs):
                         hs, ls = zip(*pairs)
-                        out.append('|'.join( [ str(x+1) for x in hs ] ))
+                        out.append('|'.join( [ str(x+shift) for x in hs ] ))
                         out.append('|'.join( ls )) #[ self.indices.i2s('label', l) for l in ls ] ))
                     else:
                         out.append('_')
