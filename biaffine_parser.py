@@ -342,7 +342,11 @@ mlp_lab_o_size = 400
               ## OBS g_heads = heads.unsqueeze(1).repeat(1,num_labels,1).unsqueeze(2)
 
               # Predicted label scores of PREDICTED heads (dozat et al. 2017):
-              # TODO: try to use predicted label for GOLD heads
+              # TODO: distinguish training and inference time
+              #     - at inference time : predicted label is necessarily best label of predicted head
+              #     - at training time : the predicted head might be wrong,
+              #                          problem to enforce a gold label that does not pertain to the predicted head
+              #                          => try to use predicted label for GOLD heads at training time
               #    prepare pred_heads to serve as index for gather
               #    [b, d] = pred h => [b, 1, d] => [b, l, d] => [b, l, 1, d] = pred h
               i_pred_heads = pred_heads.unsqueeze(1).expand(-1,num_labels,-1).unsqueeze(2) 
