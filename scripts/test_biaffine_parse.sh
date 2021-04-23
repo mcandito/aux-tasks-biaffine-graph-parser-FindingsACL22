@@ -1,6 +1,8 @@
 
 set -x
 
+# eg : 2021-04-21-12-28-41
+MODEL_STAMP=$1
 
 PROJH=$HOME/Documents/A_PROJETS/GRAPH_PARSER/github/biaffine-graph-parser
 # on CLC
@@ -9,7 +11,7 @@ PROJH=/home/mcandito/A_PROJETS/GRAPH_PARSER/github/biaffine-graph-parser
 
 D=$PROJH/../../git/marie-parsing/resources
 
-MODEL_DIR=$PROJH/../OUTPUT/output-2021-04-20-17-33-03
+MODEL_DIR=$PROJH/../OUTPUT/output-$1
 
 # TREES
 DEV_FILE=$D/FRENCH_SPMRL_dep_trees/dev.French.predmorph.conll
