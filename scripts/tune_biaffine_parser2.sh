@@ -31,7 +31,7 @@ W_EMB_SIZE=100
 #L_EMB_SIZE=100
 P_EMB_SIZE=50
 
-NB_EPOCHS=40 #
+NB_EPOCHS=25 #
 NB_EPOCHS_ARC_ONLY=0
 
 BATCH_SIZE=8 #12
@@ -45,26 +45,31 @@ LSTM_H_SIZE=600
 LAB_LOSS_WEIGHT=0.5
 LEX_DROPOUT=0.4
 
-for FREEZE_BERT in '-f ' '';
+# rerun after debug of unk when using pretrained-embeddings
+
+for FREEZE_BERT in ''; #'-f ' 
 do for LR in 0.00002 0.00001;
-   do for POS_ARC_WEIGHT in 1.5 1;
+   do for POS_ARC_WEIGHT in 1; #1.5; useless in the end
       do for MLP_ARC_O_SIZE in 400;# 300; # used for ARC and LAB # 600 is too big
-	 do  for R_BERT_SIZE in 0; # 300;
-	     do for L_EMB_SIZE in 0 100;
-		do for EMB_FILE in $D/vecs100-linear-frwiki ; #None
-		   do
-		       timestamp=$(date "+%Y-%m-%d-%H-%M-%S");
-		       O=$PROJH/../OUTPUT/output-$timestamp;
-		       mkdir $O;
-		       echo $O >> $META_LOG ;
-		       echo python $PROJH/train_or_use_parser.py train $TRAIN_FILE $O -g --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --reduced_bert_size $R_BERT_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -i $LAB_LOSS_WEIGHT --pos_arc_weight $POS_ARC_WEIGHT -n $NB_EPOCHS --nb_epochs_arc_only $NB_EPOCHS_ARC_ONLY --device_id $DEVICE_ID --bert_name $BERT_NAME $FREEZE_BERT >> $META_LOG ;
-		       python $PROJH/train_or_use_parser.py train $TRAIN_FILE $O -g --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --reduced_bert_size $R_BERT_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -i $LAB_LOSS_WEIGHT --pos_arc_weight $POS_ARC_WEIGHT -n $NB_EPOCHS --nb_epochs_arc_only $NB_EPOCHS_ARC_ONLY --device_id $DEVICE_ID --bert_name $BERT_NAME $FREEZE_BERT;
+	 do  for R_BERT_SIZE in 0; # 300; # no reduction in the end
+	     do for L_EMB_SIZE in 0 100;  # with or without lemmas
+		do for P_EMB_SIZE in 0 50;# with or without POS
+		   do for EMB_FILE in None $D/vecs100-linear-frwiki; # with or without embeddings
+		      do for i in 1 2 3; # 3 runs with same config
+			 do
+			     timestamp=$(date "+%Y-%m-%d-%H-%M-%S");
+			     O=$PROJH/../OUTPUT/output-$timestamp;
+			     mkdir $O;
+			     echo $O >> $META_LOG ;
+			     echo python $PROJH/train_or_use_parser.py train $TRAIN_FILE $O -g --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --reduced_bert_size $R_BERT_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -i $LAB_LOSS_WEIGHT --pos_arc_weight $POS_ARC_WEIGHT -n $NB_EPOCHS --nb_epochs_arc_only $NB_EPOCHS_ARC_ONLY --device_id $DEVICE_ID --bert_name $BERT_NAME $FREEZE_BERT >> $META_LOG ;
+			     python $PROJH/train_or_use_parser.py train $TRAIN_FILE $O -g --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --reduced_bert_size $R_BERT_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -i $LAB_LOSS_WEIGHT --pos_arc_weight $POS_ARC_WEIGHT -n $NB_EPOCHS --nb_epochs_arc_only $NB_EPOCHS_ARC_ONLY --device_id $DEVICE_ID --bert_name $BERT_NAME $FREEZE_BERT;
+			 done
+		      done
 		   done
 		done
 	     done
-	  done
-       done
-    done
+	 done
+      done
+   done
 done
-
        
