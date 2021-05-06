@@ -8,6 +8,7 @@ from tqdm import tqdm
 #from tqdm.notebook import tqdm # for progress bars in notebooks
 from random import shuffle
 import sys
+from collections import defaultdict
 
 from modules import *
 from data import *
