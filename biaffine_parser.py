@@ -1032,7 +1032,7 @@ mlp_lab_o_size = 400
 # TODO UPDATE
     def dump_predictions_graph_mode(self, batch, pred_arcs, pred_labels, out_stream):
         """ dump gold and predictions into file """
-        lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja = batch
+        lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols, slabseqs = batch
 
         (batch_size, n) = forms.size() 
 
