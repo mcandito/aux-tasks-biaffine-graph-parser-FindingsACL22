@@ -68,10 +68,10 @@ if __name__ == "__main__":
 #    argparser.add_argument('-o', '--optimizer', help='The optimization algo (from pytorch optim module). Default=SGD', default='SGD')
     argparser.add_argument('-r', '--learning_rate', help='learning rate, default=0.1', type=float, default=0.00001)
     argparser.add_argument('-d', '--lex_dropout', help='lexical dropout rate, default=0.3', type=float, default=0.3)
-    argparser.add_argument('-i', '--lab_loss_weight', help='label loss weight w (arc loss will be 1 - w). Default=0.3', type=float, default=0.3)
-    argparser.add_argument('--pos_arc_weight', help='(for graph mode only) weight for positive arcs in binary cross-entropy. Default=1.5', type=float, default=1.5)
+#    argparser.add_argument('-i', '--lab_loss_weight', help='label loss weight w (arc loss will be 1 - w). Default=0.3', type=float, default=0.3)
+#    argparser.add_argument('--pos_arc_weight', help='(for graph mode only) weight for positive arcs in binary cross-entropy. Default=1.5', type=float, default=1.5)
     argparser.add_argument('-n', '--nb_epochs', help='Max nb epochs. Default=40', type=int, default=40)
-    argparser.add_argument('--nb_epochs_arc_only', help='Nb epocs to run using arc loss only. Default=0', type=int, default=0)
+#    argparser.add_argument('--nb_epochs_arc_only', help='Nb epocs to run using arc loss only. Default=0', type=int, default=0)
     argparser.add_argument('--device_id', help='GPU cuda device id. Default=0', type=int, default=0)
     argparser.add_argument('-t', '--trace', action="store_true", help='print some traces. Default=False', default=False)
     argparser.add_argument('--out_parsed_file', help='Pertains in test mode only. If set to non None, filename into which predictions will be dumped', default=None)
@@ -181,10 +181,7 @@ if __name__ == "__main__":
                                    args.nb_epochs,
                                    args.batch_size,
                                    args.learning_rate,
-                                   args.lab_loss_weight, 
                                    args.lex_dropout,
-                                   nb_epochs_arc_only = args.nb_epochs_arc_only,
-                                   pos_arc_weight = args.pos_arc_weight,
                                    graph_mode = args.graph_mode)
                 
         # TODO: use this opt...
