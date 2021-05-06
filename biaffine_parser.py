@@ -838,20 +838,21 @@ mlp_lab_o_size = 400
           
     def build_log_suff(self):
         # Fscore for tasks a, l, ah, lh (ah = n best-scored arcs, n computed with nbheads task (h))
-        self.log_heading_suff = '\t'.join([ 'RESULT', 'corpus', 'Fa', 'Fl', 'Fah', 'Flh', 'effective nb epochs', 'g or t' ] )
+        self.log_heading_suff = '\t'.join([ 'RESULT', 'corpus', 'Fa', 'Fl', 'Fah', 'Flh', 'effective nb epochs', 'g or t', 'tasks' ] )
         if self.graph_mode:
             self.log_values_suff = 'graph\t'
         else:
             self.log_values_suff = 'tree\t' 
-        l = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size','mlp_arc_o_size','mlp_arc_dropout', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'nb_epochs_arc_only', 'lab_loss_weight', 'lex_dropout', 'pos_arc_weight']
+        self.log_values_suff += '.'.join(sorted(self.tasks))+'\t'
+        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size','mlp_arc_o_size','mlp_arc_dropout', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout']
 
-        l_strs = [ str(self.__dict__[f]) for f in l ]
-        config_str = '_'.join(l_strs) # get a compact name for the hyperparameter config
-        l_strs = [config_str] + l_strs
-        l = ['config_str'] + l
+        featvals = [ str(self.__dict__[f]) for f in featnames ]
+        config_str = '_'.join(featvals) # get a compact name for the hyperparameter config
+        featvals = [config_str] + featvals
+        featnames = ['config_str'] + featnames
 
-        self.log_heading_suff += '\t' + '\t'.join( l ) + '\n'
-        self.log_values_suff += '\t'.join (l_strs) + '\n'
+        self.log_heading_suff += '\t' + '\t'.join( featnames ) + '\n'
+        self.log_values_suff += '\t'.join (featvals) + '\n'
 
 
     def log_train_hyper(self, outstream):
