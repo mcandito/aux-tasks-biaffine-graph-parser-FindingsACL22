@@ -21,7 +21,8 @@ class DepDataSet:
     
         """
         self.corpus_type = corpus_type  # train / dev / test / val
-        self.size = len(sentences)
+        self.nb_sentences = len(sentences)
+        self.nb_words = sum([len(x) for x in sentences])
         self.indices = indices
         self.device = device
 
@@ -42,7 +43,7 @@ class DepDataSet:
 
       NB: ** original order is lost **
       """
-      new_order = list(range(self.size))
+      new_order = list(range(self.nb_sentences))
       shuffle(new_order)
       
       for member in ['sentences','isentences']:
@@ -104,7 +105,7 @@ class DepDataSet:
             self.sort_dec_length()
                     
         # ranks of first sentence of each batch
-        batch_rks = list(range(0, self.size, batch_size))
+        batch_rks = list(range(0, self.nb_sentences, batch_size))
         
         if shuffle_batches:
             shuffle(batch_rks)
@@ -304,6 +305,7 @@ class DepGraphDataSet(DepDataSet):
         b_forms = []
         b_lemmas = []
         b_tags = []
+        b_slabseqs = []
         
         # padding info (redundant)
         # real lengths of sequences in batch
@@ -315,11 +317,14 @@ class DepGraphDataSet(DepDataSet):
         # NB: zero cells hold for 
         #     - unexistent arc in gold graph 
         #     - OR padded cell (padded dep or head)
-        b_arc_adja = np.zeros((len(isentences), m, m))          # float needed in BCELoss
-        b_lab_adja = np.zeros((len(isentences), m, m), 'int64') # int needed in crossentropyloss
+        bs = len(isentences)
+        b_arc_adja = np.zeros((bs, m, m))          # float needed in BCELoss
+        b_lab_adja = np.zeros((bs, m, m), 'int64') # int needed in crossentropyloss
+        num_labels = self.indices.get_vocab_size('label')
+        b_bols = np.zeros((bs, m, num_labels)) #@@ + 1)) # bag of labels, +1 for NOLABEL
         
         for (b,sent) in enumerate(isentences):
-            (forms, lemmas, tags, headss, labelss) = zip(*sent)
+            (forms, lemmas, tags, headss, labelss, slabseqs) = zip(*sent)
             l = len(forms)
             b_lengths.append(l)
             pad_mask_matrix = []
@@ -328,31 +333,39 @@ class DepGraphDataSet(DepDataSet):
                 pad_mask_matrix.append( l*[1] + (m-l)*[0] )
                 # better to loop over heads, cf. they are few
                 for (i,h) in enumerate(heads): 
+                    label = labelss[d][i]
                     b_arc_adja[b,h,d] = 1
-                    b_lab_adja[b,h,d] = labelss[d][i]
-            if l < m:
-                p = m*[0]
+                    b_lab_adja[b,h,d] = label
+                    b_bols[b,d,label] += 1 # bag of label
+                #@@if not(heads):
+                #@@    b_bols[b,d,num_labels] = 1 # if no head, setting the NOLABEL to +1 
+            if l < m: # add m-l full lines of zeros
+                p = m*[0] 
                 pad_mask_matrix.extend( (m-l)* [p])
             b_pad_mask.append(pad_mask_matrix)
             
             b_forms.append( list(forms) + (m - l)*[PAD_ID] )
             b_lemmas.append( list(lemmas) + (m - l)*[PAD_ID] )
             b_tags.append( list(tags) + (m - l)*[PAD_ID] )
+            b_slabseqs.append( list(slabseqs) + (m - l)*[PAD_ID] )
             
         b_forms  = torch.tensor(b_forms, device=self.device)
         b_lemmas = torch.tensor(b_lemmas, device=self.device)
         b_tags   = torch.tensor(b_tags, device=self.device)
+        b_slabseqs = torch.tensor(b_slabseqs, device=self.device)
         b_lengths = torch.tensor(b_lengths, device=self.device)
         # padding matrices for sents in batch
         b_pad_mask = torch.tensor(b_pad_mask, device=self.device)
         # dependencies adjacency matrixes for sents in batch
         b_arc_adja = torch.from_numpy(b_arc_adja).to(self.device)
         b_lab_adja = torch.from_numpy(b_lab_adja).to(self.device)
+        # bag of labels and sorted lab sequences are equivalent
+        b_bols = torch.from_numpy(b_bols).to(self.device)
         
         # bert stuff, if any
         b_bert_tokens, b_ftid_rkss = self.pad_bert_batch(bert_tid_seqs, bert_ftid_rkss)
         
-        return (b_lengths, b_pad_mask, b_forms, b_lemmas, b_tags, b_bert_tokens, b_ftid_rkss, b_arc_adja, b_lab_adja)
+        return (b_lengths, b_pad_mask, b_forms, b_lemmas, b_tags, b_bert_tokens, b_ftid_rkss, b_arc_adja, b_lab_adja, b_bols, b_slabseqs)
 
 """### test DepGraphDataSet"""
 
@@ -386,18 +399,20 @@ if False:
   print(data['train'].isentences[0])
 
 if False:
-  for lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_abdja in data['train'].make_batches(2, sort_dec_length=True, shuffle_batches=True):
-    if forms.shape[1] > 10 or lengths[0] == lengths[-1]:
+  for lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols in data['train'].make_batches(2, sort_dec_length=True, shuffle_batches=True):
+    if forms.shape[1] > 8 or lengths[0] == lengths[-1]:
         continue
-    print(lengths)
-    print(forms)
-    print(pad_masks)
+    #print(lengths)
+    #print(forms)
+    #print(pad_masks)
+    #print(bols)
 
-    #print([indices.i2s('w', x) for x in forms[1]])
+    print([indices.i2s('w', x) for x in forms[1]])
     #print([indices.i2s('l', x) for x in lemmas[1]])
     #print([indices.i2s('p', x) for x in tags[1]])
-    #print(pad_masks)
-    print(arc_adja[1])
+    print(pad_masks[1])
+    print(lab_adja[1])
+    print(bols[1])
     break
 
 

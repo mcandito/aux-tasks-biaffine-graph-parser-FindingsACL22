@@ -47,6 +47,7 @@ if __name__ == "__main__":
     argparser.add_argument('mode', choices=['train','test'], help="In train mode: train model + check performance on validation set. In Test mode (not implemented yet), loads a model and parses a file using it. Default='train'", default="train")
     argparser.add_argument('conll_file', help='Contains either train/dev/test sentences (if split_info_file is provided), or should contain training sentences for train mode, or sentences to parse in test mode.', default=None)
     argparser.add_argument('model_dir', help='if mode is train, trained model will be saved to model_dir/model, otherwise model will be loaded from it', default=None)
+    argparser.add_argument('--tasks', help='dot-separated list of tasks, among a (biaffine arcs), l (biaffine labeled arcs), h (nb of heads), d (nb of deps), s (sorted lab sequence), b (bag of labels). Default=a.l ', default='a.l')
     argparser.add_argument('--split_info_file', help='split info file (each line = sentence id, tab, corpus type (train, dev, test)', default=None)
     argparser.add_argument('-v', '--validation_conll_file', help='pertains only if split_info_file is not provided: validation sentences, will be used to evaluate model during training, and for early stopping')
     argparser.add_argument('--data_name', help='short name of data: ftb or sequoia etc... Default=ftb', default='ftb')
@@ -149,7 +150,10 @@ if __name__ == "__main__":
                 data[part] = DepTreeDataSet(part, sentences[part], indices, DEVICE)
 
         # ------------- THE PARSER ---------------------------
-        biaffineparser = BiAffineParser(indices, DEVICE, 
+        tasks = args.tasks.lower().split('.')
+        if sum([ int(t not in ['a','l','h','d','s','b']) for t in tasks ]) > 0:
+          exit("ERROR: tasks should be among a l h d s b")
+        biaffineparser = BiAffineParser(indices, DEVICE, tasks,
                                         w_emb_size=args.w_emb_size,
                                         l_emb_size=args.l_emb_size,
                                         p_emb_size=args.p_emb_size,
@@ -164,8 +168,8 @@ if __name__ == "__main__":
         )
 
         # pour tests plus rapides: utiliser training sur val
-        #train_data = data['val'] # data['train']
-        train_data = data['train']
+        train_data = data['val'] # data['train']
+        #train_data = data['train']
         val_data = data['dev']
 
         logstream = open(args.model_dir+'/log_train', 'w')
@@ -221,9 +225,12 @@ if __name__ == "__main__":
 
         logstream = open(args.model_dir+'/log_parse', 'w')
         
-        nb_gold, nb_pred, nb_correct_u, nb_correct_l = parser.predict_and_evaluate(args.graph_mode, dataset, logstream, out_file=args.out_parsed_file)
+        task2nbcorrect, task2acc = parser.predict_and_evaluate(dataset, logstream, out_file=args.out_parsed_file)
+        # print TODO
         for stream in [sys.stderr, logstream]:
-          r, p, f = rec_prec_fscore(nb_correct_u, nb_gold, nb_pred)
-          stream.write("U R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % (r, p, f, args.conll_file))
-          r, p, f = rec_prec_fscore(nb_correct_l, nb_gold, nb_pred)
-          stream.write("L R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % (r, p, f, args.conll_file))
+          print(task2nbcorrect)
+          print(task2acc)
+          #r, p, f = rec_prec_fscore(nb_correct_u, nb_gold, nb_pred)
+          #stream.write("U R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % (r, p, f, args.conll_file))
+          #r, p, f = rec_prec_fscore(nb_correct_l, nb_gold, nb_pred)
+          #stream.write("L R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % (r, p, f, args.conll_file))

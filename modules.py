@@ -77,7 +77,80 @@ class BCEWithLogitsLoss_with_mask(nn.BCEWithLogitsLoss):
             return torch.mean(loss)
         return loss
 
-"""## Building blocks of the parser"""
+
+class MSELoss_with_mask(nn.MSELoss):
+    r""" MSELoss with mask for padded tokens
+    see code of MSELoss https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html
+    """
+    __constants__ = ['reduction']
+
+    def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
+      super(MSELoss_with_mask, self).__init__(size_average, reduce, reduction)
+
+    def forward(self, input: Tensor, target: Tensor, mask: Optional[Tensor] = None) -> Tensor:
+      # apply without reduction first
+      loss = F.mse_loss(input, target, reduction='none')
+      # apply masking
+      if mask is not None:
+          loss = loss * mask
+      if self.reduction == 'sum':
+          return torch.sum(loss)
+      if self.reduction == 'mean':
+          return torch.mean(loss)
+      return loss
+
+class CosineLoss_with_mask(nn.Module):
+    r""" Input and target are vectors which similarity we wish to maximize, 
+        
+        Hence we take as loss: - cosine(input, target)
+    """
+    __constants__ = ['reduction']
+
+    def __init__(self, reduction: str = 'mean') -> None:
+        super(CosineLoss_with_mask, self).__init__()
+        self.reduction = reduction
+
+    def forward(self, input: Tensor, target: Tensor, mask: Optional[Tensor] = None) -> Tensor:
+      # input : b, d, l
+      # target : b, d, l
+      loss = -F.cosine_similarity(input, target, dim=2) # b, d
+
+      # apply masking
+      if mask is not None:
+          loss = loss * mask
+      if self.reduction == 'sum':
+          return torch.sum(loss)
+      if self.reduction == 'mean':
+          return torch.mean(loss)
+      return loss
+
+class L2DistanceLoss_with_mask(nn.Module):
+    r""" Input and target are vectors whose L2 dist we wish to maximize, 
+        
+        Hence we take as loss: || input - target||**2
+    """
+    __constants__ = ['reduction']
+
+    def __init__(self, reduction: str = 'mean') -> None:
+        super(L2DistanceLoss_with_mask, self).__init__()
+        self.reduction = reduction
+
+    def forward(self, input: Tensor, target: Tensor, mask: Optional[Tensor] = None) -> Tensor:
+      # input : b*d, l+1
+      # target : b*d, l+1
+      loss = F.pairwise_distance(input, target, p=2, keepdim=False) # b*d
+
+      # apply masking
+      if mask is not None:
+          loss = loss * mask
+      if self.reduction == 'sum':
+          return torch.sum(loss)
+      if self.reduction == 'mean':
+          return torch.mean(loss)
+      return loss
+
+    
+"""## MLP and Biaffine modules"""
 
 #a = torch.empty(2,3,4,device='cuda')
 #print(a)
@@ -86,7 +159,7 @@ class BCEWithLogitsLoss_with_mask(nn.BCEWithLogitsLoss):
 
 class MLP(nn.Module):
     """ A single hidden layer MLP with dropout"""
-    def __init__(self, input_size, hidden_size, output_size, activation='ReLU', dropout=0.0):
+    def __init__(self, input_size, hidden_size, output_size, activation='ReLU', dropout=0.25):
         # TODO: handle bias
         super(MLP, self).__init__()
         self.W1 = nn.Linear(input_size, hidden_size)

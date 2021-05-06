@@ -24,13 +24,18 @@ class Indices:
         self.sentences = known_sentences
         
         self.vocabs = {} # the various vocabs key=vocab type, val=dic i2s and s2i
-        self.iunk = {}   # indices of unk for the various vocab types
         
         # compute indices on known sentences 
         #         one tok = a 5-tuple [form, lemma, tag, gov(s), label(s)]
+        #     or a 6-tuple            [form, lemma, tag, govs, labels, slabseq]
         train_tokens = [tok for sent in known_sentences for tok in sent]
 
-        (forms, lemmas, tags, heads, labels) = list(zip(*train_tokens))
+        if len(train_tokens[0]) == 5:
+          (forms, lemmas, tags, heads, labels) = list(zip(*train_tokens))
+          add_slabseqs = False
+        else:
+          (forms, lemmas, tags, heads, labels, slabseqs) = list(zip(*train_tokens))
+          add_slabseqs = True
         
         self.bert_tokenizer = bert_tokenizer
 
@@ -51,6 +56,19 @@ class Indices:
         # NB: important to define the true label ids distinct from the padding label id (==0)
         #     unk useless for labels
         self.index_new_vocab('label', labels, add_pad=True, add_unk=False)
+
+        # indices for the sorted lab sequences (seen as atoms)
+        if add_slabseqs:
+          # too many symbols, keep only the first 30
+          slabseq2occ = defaultdict(int)
+          for s in slabseqs:
+            slabseq2occ[s] +=1
+          known_slabseqs = sorted(slabseq2occ.keys(), key=lambda x: slabseq2occ[x], reverse=True)
+          # keep only the 30 most freq (others will get the UNK_ID)
+          i2s = [PAD_SYMB, UNK_SYMB] + known_slabseqs[:30]
+          # symbols to indices
+          s2i = {x:i for i,x in enumerate(i2s)}    
+          self.vocabs['slabseq'] = {'i2s': i2s, 's2i': s2i}
         
 
     def index_new_vocab(self, vocab, symbol_seq, add_pad=True, add_unk=True):
@@ -74,7 +92,6 @@ class Indices:
         i2s = list(set(symbol_seq))
         
         # special symbols
-        self.iunk[vocab] = None
         # NB: by construction pad id SHOULD always be 0
         #     and if existing, unk is 1 and drop is 2
         if add_pad: 
@@ -103,6 +120,39 @@ class Indices:
     def get_vocab_size(self, vocab_type):
         return len(self.vocabs[vocab_type]['i2s'])
 
+    def interpret_slabseqs(self, slabseqs):
+      """ From a tensor of sorted sequences of labels to 
+         - corresponding nbheads
+         - corresponding bag of labels ("bol"s)
+
+      Since the unk slabseq is not interpretable
+      - the nb of heads is set to -1 
+      - bol is null vector
+      
+      Input: tensor of shape *
+      Output:
+        - nbheads (shape *)
+        - bols    (shape *, num_labels)
+      """
+      num_labels = self.get_vocab_size('label')
+      flat_slabseqs = slabseqs.view(-1)
+      nbtot = flat_slabseqs.shape[0] # total nb of slabseq in input tensor
+      flat_bols = torch.zeros(nbtot, num_labels, dtype=torch.int32) #@@ +1 # bag of labels, +1 for NOLABEL
+      flat_nbheads = torch.zeros(nbtot, dtype=torch.int32)
+      for i in range(nbtot):
+        islabseq = flat_slabseqs[i]
+        if islabseq == UNK_ID: # if unknown slabseq => cannot interpret the nb of heads
+          flat_nbheads[i] = -1
+        else:
+          slabseq = self.i2s('slabseq', islabseq)
+          ilabels = [ self.s2i('label', label) for label in slabseq.split('|') ]
+          for ilab in ilabels:
+            flat_bols[i,ilab] += 1
+            flat_nbheads[i] += 1
+      # reshaping to input shape
+      input_size = slabseqs.size()
+      return flat_nbheads.view(input_size), flat_bols.view(list(input_size) + [num_labels])
+
     def convert_tree_tok_to_indices(self, tok):
         """ 
         Input = one token from dep tree (= a 5-tuple)
@@ -116,14 +166,16 @@ class Indices:
                 
     def convert_graph_tok_to_indices(self, tok):
         """ 
-        Input = one token from dep graph (= a 5-tuple, with list of labels / heads)
+        Input = one token from dep graph (= a 6-tuple, with list of labels / heads)
         Output: same but converted to indices for each vocab type
         """
         return [self.s2i('w', tok[0]),
                 self.s2i('l', tok[1]),
                 self.s2i('p', tok[2]),
                 tok[3], # heads are integers already
-                [ self.s2i('label', x) for x in tok[4]]]
+                [ self.s2i('label', x) for x in tok[4]],
+                self.s2i('slabseq', tok[5])
+        ]
 
     def convert_tree_symbols_to_indices(self, sentences):
         return [ [self.convert_tree_tok_to_indices(tok) for tok in sent] for sent in sentences ]
@@ -131,7 +183,7 @@ class Indices:
     def convert_graph_symbols_to_indices(self, sentences):
         return [ [self.convert_graph_tok_to_indices(tok) for tok in sent] for sent in sentences ]
 
-    def lex_dropout_itok(self, itok, dropout_rate):
+    def lex_dropout_itok(self, itok, dropout_rate, drop_to_unk_rate=0.01):
       """
       Input: 
         - a token already converted into indices (5-tuple w, l, p, heads(s), labels(s))
@@ -143,6 +195,11 @@ class Indices:
       nitok = copy.deepcopy(itok)
       r = False
       for i in [0,1,2]:
+        # drop to unk to learn the unk w / l / p embeddings
+        #if random() < drop_to_unk_rate:
+        #  itok[i] = UNK_ID
+        # dozat 2008 dropped embeddings were replaced with learnt dropped tokens
+        #elif random() < dropout_rate:
         if random() < dropout_rate:
           nitok[i] = DROP_ID #UNK_ID
           r = True
@@ -181,7 +238,7 @@ class Indices:
         for s in self.vocabs['w']['i2s']:
             if s == UNK_SYMB or s == DROP_SYMB:
                 # random vector for unk token and for drop token(between a=-1 and b=1 : (b-a)*sample + a)
-                # rem: apparently for drop token, better to have a random vector than a null vec
+                # rem: apparently for drop token, more stable to learn from a random vector than from a null vec
                 self.iw2emb.append( 2 * np.random.random(self.w_emb_size) - 1 )
             elif s == PAD_SYMB:
                 # null vector for pad token
@@ -241,7 +298,7 @@ class Indices:
         tkz = self.bert_tokenizer
         
         for sent in sentences:
-            (forms, lemmas, tags, heads, labels) = list(zip(*sent))
+            (forms, lemmas, tags, heads, labels, _) = list(zip(*sent))
             tid_seq = [ tkz.bos_token_id ]
             first_tok_ranks = [ 0 ] # rank of bos # will be used for bert embedding of <root> token
             start = 1
