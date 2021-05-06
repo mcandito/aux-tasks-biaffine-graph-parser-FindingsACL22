@@ -154,7 +154,7 @@ def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, us
     stream = open(gold_conll_file)
     # debug: fake token root should get an empty list of governors (no reflexive link to itself!)
     #sent = [[ROOT_FORM, ROOT_LEMM, ROOT_TAG, [ROOT_RK], [ROOT_LABEL]]]
-    sent = [[ROOT_FORM, ROOT_LEMM, ROOT_TAG, [], []]]
+    sent = [[ROOT_FORM, ROOT_LEMM, ROOT_TAG, [], [], '']]
     sent_rk = 0
     for line in stream.readlines():
         if line.startswith('#'):
@@ -171,7 +171,7 @@ def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, us
                 max_sent_len[part] = l 
 
             #sent = [[ROOT_FORM, ROOT_LEMM, ROOT_TAG, [ROOT_RK], [ROOT_LABEL]]]
-            sent = [[ROOT_FORM, ROOT_LEMM, ROOT_TAG, [], []]]
+            sent = [[ROOT_FORM, ROOT_LEMM, ROOT_TAG, [], [], '']]
         else:
             cols = line.split('\t')
             # skip conllu multi-word tokens
@@ -183,6 +183,7 @@ def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, us
             govs   = cols[6]
             labels = cols[7]
             (govs, labels) = get_deep_govs(govs, labels, use_canonical_gf)
+            slabseq = '|'.join(sorted(labels))
             if labels == '':
                 print("PROBLEM", line)
             # sentid attribute on first token
@@ -192,7 +193,7 @@ def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, us
                     sentid = m.group(1)
                 else:
                     sentid = sent_rk
-            sent.append([form, lemma, tag, govs, labels])
+            sent.append([form, lemma, tag, govs, labels, slabseq])
 
     print("Max sentence length:", max_sent_len)
     
