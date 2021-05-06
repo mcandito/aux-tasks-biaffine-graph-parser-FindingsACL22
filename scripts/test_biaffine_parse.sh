@@ -21,7 +21,7 @@ DEV_FILE=$D/deep_french_dep_graphs/compacte.ftb.predmorph.dev
 
 OUT_PARSED_FILE=$MODEL_DIR/compacte.ftb.predbiaff.dev
 
-DEVICE_ID=2
+DEVICE_ID=1
 
 
 BATCH_SIZE=12
