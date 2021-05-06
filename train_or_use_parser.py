@@ -186,25 +186,23 @@ if __name__ == "__main__":
                 
         # TODO: use this opt...
         opt = {
-            'logstream':logstream,
-            'w_emb_size':args.w_emb_size,
-            'w_emb_file':args.w_emb_file,
-            'l_emb_size':args.l_emb_size,
-            'p_emb_size':args.p_emb_size,
-            'lstm_h_size':args.lstm_h_size,
-            'mlp_arc_o_size':args.mlp_arc_o_size,
-            'use_bias':args.use_bias,
-            'bert_name':args.bert_name,
-
-            'model_file':args.model_dir+'/model',
-        
-            'graph_mode':args.graph_mode,
-            'lr':args.learning_rate,
-            'lab_loss_weight':args.lab_loss_weight,
-            'lex_dropout':args.lex_dropout,
-            'nb_epochs':args.nb_epochs,
-            'nb_epochs_arc_only':args.nb_epochs_arc_only,
-            'early_stopping':args.early_stopping,
+          'logstream':logstream,
+          'w_emb_size':args.w_emb_size,
+          'w_emb_file':args.w_emb_file,
+          'l_emb_size':args.l_emb_size,
+          'p_emb_size':args.p_emb_size,
+          'lstm_h_size':args.lstm_h_size,
+          'mlp_arc_o_size':args.mlp_arc_o_size,
+          'mlp_lab_o_size':args.mlp_lab_o_size,
+          'use_bias':args.use_bias,
+          'bert_name':args.bert_name,
+          'tasks':args.tasks,
+          'model_file':args.model_dir+'/model',
+          'graph_mode':args.graph_mode,
+          'lr':args.learning_rate,
+          'lex_dropout':args.lex_dropout,
+          'nb_epochs':args.nb_epochs,
+          'early_stopping':args.early_stopping,
         }
 
     # parsing mode
