@@ -118,6 +118,7 @@ if __name__ == "__main__":
             exit("Model file %s will not be writable!\n" % model_file)
 
         # ------------- DATA (WITHOUT INDICES YET) ------------------------------
+        print('loading sentences...')
         split_info_file = args.split_info_file
         if args.graph_mode:
             load_fn = 'load_dep_graphs'
@@ -139,9 +140,11 @@ if __name__ == "__main__":
 
         # ------------- INDICES ------------------------------
         # indices are defined on train sentences only
+        print('indices...')
         indices = Indices(sentences['train'], w_emb_file=w_emb_file, bert_tokenizer=bert_tokenizer)
 
         # ------------- INDEXED DATA -------------------------
+        print('indexing data...')
         data = {}
         for part in sentences.keys():
             if args.graph_mode:
@@ -168,8 +171,8 @@ if __name__ == "__main__":
         )
 
         # pour tests plus rapides: utiliser training sur val
-        train_data = data['val'] # data['train']
-        #train_data = data['train']
+        #train_data = data['dev'] # data['train']
+        train_data = data['train']
         val_data = data['dev']
 
         logstream = open(args.model_dir+'/log_train', 'w')

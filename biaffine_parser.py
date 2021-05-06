@@ -138,8 +138,7 @@ mlp_lab_o_size = 400
             self.w_embs = nn.Embedding.from_pretrained(matrix, freeze = False).to(self.device)
             # linear transformation of the pre-trained embeddings (dozat 2018)
             self.w_emb_linear_reduction = nn.Linear(matrix.shape[1],w_emb_size).to(self.device)
-            
-        print("w_embs done")
+            print("w_embs done")
         # -------------------------
         # pos tag embedding layer
         if p_emb_size:
