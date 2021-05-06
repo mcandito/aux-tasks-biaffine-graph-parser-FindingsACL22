@@ -110,7 +110,7 @@ def load_dep_trees(gold_conll_file, corpus_type='all', split_info_file=None, val
             
     return sentences
 
-def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, canonical_gf=True, val_proportion=None):
+def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, use_canonical_gf=True, val_proportion=None):
     """
         Inputs: - conll(u) file with dependency graphs
                     (columns HEAD and GOV are pipe-separated values)
@@ -123,7 +123,7 @@ def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, ca
 
                     split_info_file overrides corpus_type
 
-                - canonical_gf: if set, canonical grammatical functions are used (final gf are discarded)
+                - use_canonical_gf: if set, canonical grammatical functions are used (final gf are discarded)
 
                 - val_proportion : if set to value > 0 (and <1)
                   the training file is split into train/validation,
@@ -182,7 +182,7 @@ def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, ca
             tag   = cols[4]
             govs   = cols[6]
             labels = cols[7]
-            (govs, labels) = get_deep_govs(govs, labels, canonical_gf)
+            (govs, labels) = get_deep_govs(govs, labels, use_canonical_gf)
             if labels == '':
                 print("PROBLEM", line)
             # sentid attribute on first token
@@ -205,21 +205,21 @@ def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, ca
             exit("PB val_proportion used but no training sentences")
     return sentences
 
-def get_label(label, canonical_gf=True):
+def get_label(label, use_canonical_gf=True):
     if label.startswith("S:") or label.startswith("I:"):
         return ''
     if label.startswith('D:'):
         label = label[2:]
     if ':' in label:
         (label, cano) = label.split(':')
-        if canonical_gf:
+        if use_canonical_gf:
             return cano
     return label
     
-def get_deep_govs(govs, labels, canonical_gf=True):
+def get_deep_govs(govs, labels, use_canonical_gf=True):
     """ works out the governors / labels in the deep_and_surf sequoia format
     - S: and I: arcs are discarded
-    - get canonical function if canonical_gf is set, otherwise final functions
+    - get canonical function if use_canonical_gf is set, otherwise final functions
     
     Returns list of gov linear indices, list of corresponding labels
     
@@ -230,7 +230,7 @@ def get_deep_govs(govs, labels, canonical_gf=True):
         input : "3|6", "suj:suj|D:suj:obj" => [3,6], ['suj','obj']
     """
     govs = [int(x) for x in govs.split("|")]
-    labels = [get_label(x, canonical_gf) for x in labels.split("|")]
+    labels = [get_label(x, use_canonical_gf) for x in labels.split("|")]
     filtered = filter(lambda x: x[1], zip(govs, labels))
     f = list(zip(*filtered))
     if not(f):
