@@ -901,15 +901,19 @@ mlp_lab_o_size = 400
           
     def build_log_suff(self):
         # Fscore for tasks a, l, ah, lh (ah = n best-scored arcs, n computed with nbheads task (h))
-        self.log_heading_suff = '\t'.join([ 'RESULT', 'corpus', 'Fa', 'Fl', 'Fah', 'Flh', 'Fas', 'Fls', 'Fav', 'Flv', 'effective nb epochs', 'g or t', 'tasks' ] )
+        self.log_heading_suff = '\t'.join([ 'RESULT', 'corpus', 'Fa', 'Fl', 'Fah', 'Flh', 'Fas', 'Fls', 'Fav', 'Flv', 'effective nb epochs', 'g or t'] )
         if self.graph_mode:
             self.log_values_suff = 'graph\t'
         else:
-            self.log_values_suff = 'tree\t' 
-        self.log_values_suff += '.'.join(sorted(self.tasks))+'\t'
+            self.log_values_suff = 'tree\t'
         featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size','mlp_arc_o_size','mlp_arc_dropout', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout']
 
         featvals = [ str(self.__dict__[f]) for f in featnames ]
+
+        t = '.'.join(sorted(self.tasks))
+        featvals = [t, str(self.coeff_aux_task_as_input)] + featvals
+        featnames = ['tasks', 'coeff_aux_task_as_input'] + featnames
+
         config_str = '_'.join(featvals) # get a compact name for the hyperparameter config
         featvals = [config_str] + featvals
         featnames = ['config_str'] + featnames
