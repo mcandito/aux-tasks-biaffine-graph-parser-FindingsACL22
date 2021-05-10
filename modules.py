@@ -194,26 +194,29 @@ Returns score matrices of shape
 
 NB: actually bias not implemented, hence bilinear rather than biaffine
 """
-    def __init__(self, device, in_size, num_scores_per_arc=1, use_bias=False):
+    def __init__(self, device, head_size, dep_size, num_scores_per_arc=1, use_bias=False):
         super(BiAffine, self).__init__()
         
         self.device = device
         self.num_scores_per_arc = num_scores_per_arc
         self.use_bias = use_bias
         if use_bias:
-            in_size += 1
+            head_size += 1
+            dep_size += 1
         self.U = nn.Parameter(torch.empty(num_scores_per_arc,
-                                           in_size,
-                                           in_size,
+                                           head_size,
+                                           dep_size,
                                            device=device))
         nn.init.xavier_uniform_(self.U)
         
     def forward(self, Hh, Hd):
         """
-        Input: Hh = head tensor      shape  [batch_size, n,  d]
-               Hd = dependent tensor shape  [batch_size, n,  d]
+        Input: Hh = head tensor      shape  [batch_size, n,  head_size]
+               Hd = dependent tensor shape  [batch_size, n,  dep_size]
                                 with n = length of sequence,
-                                     d = in size
+                                     head_size = in size for head words
+                                     dep_size = in size for dependent words
+        
         Returns : a score matrix S of shape :
         - if self.num_scores_per_arc > 1 (for label scores):
           [batch_size, num_lab, n, n ] (num_lab = self.num_scores_per_arc) 

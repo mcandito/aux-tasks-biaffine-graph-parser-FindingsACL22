@@ -73,12 +73,16 @@ mlp_lab_o_size = 400
                  bert_name=None,   # caution: should match with indices.bert_tokenizer
                  reduced_bert_size=0,
                  freeze_bert=False,
+                 mtl_sharing_level=1, # levels of parameter sharing in mtl 1: bert+lstm only, 2: best+lstm+mlp
+                 coeff_aux_task_as_input={}, # {'s':5, 'h':20},
     ):
         super(BiAffineParser, self).__init__()
 
         self.indices = indices
         self.device = device
         self.use_pretrained_w_emb = use_pretrained_w_emb
+        # coefficients to multiply output from aux task to serve as input for a / l tasks
+        self.coeff_aux_task_as_input = coeff_aux_task_as_input
 
         self.bert_name = bert_name
         self.reduced_bert_size = reduced_bert_size
@@ -91,6 +95,7 @@ mlp_lab_o_size = 400
         self.tasks = sorted(tasks)
         self.nb_tasks = len(self.tasks)
         self.task2i = dict( [ [self.tasks[i],i ] for i in range(self.nb_tasks) ] )
+        self.mtl_sharing_level = mtl_sharing_level
 
         if 'l' in self.task2i and 'a' not in self.task2i:
           exit("ERROR: task a is required for task l")
@@ -200,35 +205,56 @@ mlp_lab_o_size = 400
         self.lab_d_mlp = MLP(s, l, l, dropout=mlp_lab_dropout).to(device)  
         self.lab_h_mlp = MLP(s, l, l, dropout=mlp_lab_dropout).to(device)
 
+        # ------ output of auxiliary tasks included as input for dependents -------
+        self.aux_insize = 0
+        self.aux_outsize = 0
+        if self.coeff_aux_task_as_input:
+          if 's' in self.coeff_aux_task_as_input:             
+            self.aux_insize += 10
+            self.s_embs = nn.Embedding(self.indices.get_vocab_size('slabseq'), 10).to(self.device)
+          if 'h' in self.coeff_aux_task_as_input:
+            self.aux_insize += 1
+          self.aux_outsize = round(mlp_arc_o_size / 8) # part that will be concatenated to arc_d (representation of dependents)
+          self.aux_task_as_input_linear_layer = nn.Linear(self.aux_insize, self.aux_outsize).to(self.device)
+          print("aux linear layer:", self.aux_insize, self.aux_outsize)
+        
+
         # ---- BiAffine scores for arcs and labels --------
         # biaffine matrix size is num_label x d x d, with d the output size of the MLPs
         if 'a' in self.task2i:
-          self.biaffine_arc = BiAffine(device, a, use_bias=self.use_bias)
+          self.biaffine_arc = BiAffine(device, a, a + self.aux_outsize, use_bias=self.use_bias)
           if 'l' in self.task2i:
-            self.biaffine_lab = BiAffine(device, l, num_scores_per_arc=self.num_labels, use_bias=self.use_bias)
+            self.biaffine_lab = BiAffine(device, l, l + self.aux_outsize, num_scores_per_arc=self.num_labels, use_bias=self.use_bias)
 
         # ----- final layers for the sub tasks ------------
 
+        if self.mtl_sharing_level == 1:
+          d = s  # final mlps applied to bi-lstm output
+        elif self.mtl_sharing_level == 2:
+          d = a  # final mlps applied to arc_d / arc_h specialized representations
+
+        #NB: in any case, hidden layers of size a
+        
         # final layer to get a single real value for nb heads / nb deps
         # (more precisely : will be interpreted as log(1+nbheads))
         if 'h' in self.task2i:
           #self.final_layer_nbheads = nn.Linear(a, 1).to(self.device)
-          self.final_layer_nbheads = MLP(a, a, 1).to(self.device)
+          self.final_layer_nbheads = MLP(d, a, 1).to(self.device)
 
         if 'd' in self.task2i:
           #self.final_layer_nbdeps = nn.Linear(a, 1).to(self.device)
-          self.final_layer_nbdeps = MLP(a, a, 1).to(self.device)
+          self.final_layer_nbdeps = MLP(d, a, 1).to(self.device)
 
         # final layer to get a bag of labels vector, of size num_labels + 1 (for an additional "NOLABEL" label) useless in the end
         #@@self.final_layer_bag_of_labels = nn.Linear(a,self.num_labels + 1).to(self.device)
         if 'b' in self.task2i:
           #self.final_layer_bag_of_labels = nn.Linear(a, self.num_labels).to(self.device)
-          self.final_layer_bag_of_labels = MLP(a, a, self.num_labels).to(self.device)
+          self.final_layer_bag_of_labels = MLP(d, a, self.num_labels).to(self.device)
 
         # final layer to get a "sorted label sequence", seen as an atomic symbol
         if 's' in self.task2i:
           #self.final_layer_slabseqs = nn.Linear(a, self.indices.get_vocab_size('slabseq')).to(self.device)
-          self.final_layer_slabseqs = MLP(a, a, self.indices.get_vocab_size('slabseq')).to(self.device)
+          self.final_layer_slabseqs = MLP(d, a, self.indices.get_vocab_size('slabseq')).to(self.device)
 
         #for name, param in self.named_parameters():
         #  if name.startswith("final"):
@@ -295,28 +321,60 @@ mlp_lab_o_size = 400
 
         S_arc = S_lab = log_nbheads = log_nbdeps = bols = S_slabseqs = None
 
+        # ------------- auxiliary tasks ------------------
+        # decide the input for the mlps of auxiliary tasks, depending on the sharing level
+        if self.mtl_sharing_level == 2:
+          input_d = arc_d
+          input_h = arc_h
+        else:
+          input_d = lstm_hidden_seq
+          input_h = lstm_hidden_seq
+          
+        # nb heads / nb deps (actually output will be interpreted as log(1+nb))
+        if 'h' in self.task2i:
+          log_nbheads = self.final_layer_nbheads(input_d).squeeze(2) # [b, max_seq_len]
+
+        if 'd' in self.task2i:
+          log_nbdeps = self.final_layer_nbdeps(input_h).squeeze(2)   # [b, max_seq_len]
+
+        # bag of labels
+        if 'b' in self.task2i:
+          bols = self.final_layer_bag_of_labels(input_d) # [b, max_seq_len, num_labels + 1] (+1 for NOLABEL)
+
+        # sorted lab sequences (equivalent to bag of labels, but seen as a symbol for the whole BOL)
+        if 's' in self.task2i:
+          S_slabseqs = self.final_layer_slabseqs(input_d)
+
         # Biaffine scores for arcs
         if 'a' in self.task2i:
+          # if use output of aux tasks s and binh as input rep for dependents
+          # => modify arc_d
+          if self.coeff_aux_task_as_input:
+            if 's' in self.coeff_aux_task_as_input:
+              # predict the slabseqs
+              pred_slabseqs = torch.argmax(S_slabseqs, dim=2) # [b, d]              
+              # convert them to embeddings
+              aux_input = self.coeff_aux_task_as_input['s'] * self.s_embs(pred_slabseqs)
+              if 'h' in self.coeff_aux_task_as_input:
+                # take the scores of each of the bin nb of heads (0, 1, or more than 1 (=2))
+                ##pred_binnbheads = torch.clamp(torch.round(torch.exp(log_binnbheads) - 1), 0, 2)
+                c = self.coeff_aux_task_as_input['h']
+                aux_input = torch.cat((aux_input, c * log_nbheads.unsqueeze(2)), dim=-1)
+            elif 'h' in self.coeff_aux_task_as_input:
+              aux_input = self.coeff_aux_task_as_input['h'] * log_nbheads.unsqueeze(2)
+            #print("AUX INPUT", aux_input.shape)
+            aux_hidden = self.aux_task_as_input_linear_layer(aux_input)
+            arc_d = torch.cat((arc_d, aux_hidden), dim=-1)
+            
           S_arc = self.biaffine_arc(arc_h, arc_d) # S(k, i, j) = score of sample k, head word i, dep word j
 
         # Biaffine scores for labeled arcs
         if 'l' in self.task2i:
+          if self.aux_outsize:
+            # aux_hidden already computed in task 'a'
+            lab_d = torch.cat((lab_d, aux_hidden), dim=-1)
           S_lab = self.biaffine_lab(lab_h, lab_d) # S(k, l, i, j) = score of sample k, label l, head word i, dep word j
-
-        # nb heads / nb deps (actually output will be interpreted as log(1+nb))
-        if 'h' in self.task2i:
-          log_nbheads = self.final_layer_nbheads(arc_d).squeeze(2) # [b, max_seq_len]
-
-        if 'd' in self.task2i:
-          log_nbdeps = self.final_layer_nbdeps(arc_h).squeeze(2)   # [b, max_seq_len]
-
-        # bag of labels
-        if 'b' in self.task2i:
-          bols = self.final_layer_bag_of_labels(arc_d) # [b, max_seq_len, num_labels + 1] (+1 for NOLABEL)
-
-        # sorted lab sequences (equivalent to bag of labels, but seen as a symbol for the whole BOL)
-        if 's' in self.task2i:
-          S_slabseqs = self.final_layer_slabseqs(arc_d)
+        
 
         return S_arc, S_lab, log_nbheads, log_nbdeps, bols, S_slabseqs
     
@@ -594,7 +652,11 @@ mlp_lab_o_size = 400
                   if 'h' in alt_pred_arcs:
                     int_nbheads_list['h'] = pred_nbheads[b,d].item()
                   if 's' in alt_pred_arcs:
-                    int_nbheads_list['s'] = nbheads_from_s[b,d].item()
+                    # fall back on task h if unknown slabseq
+                    if nbheads_from_s[b,d] == -1 and 'h' in alt_pred_arcs:
+                      int_nbheads_list['s'] = pred_nbheads[b,d].item()
+                    else:
+                      int_nbheads_list['s'] = nbheads_from_s[b,d].item()
                   if 'v' in alt_pred_arcs:
                     int_nbheads_list['v'] = nbheads_from_v[b,d].item()
                   for h in range(m): # h
@@ -827,7 +889,7 @@ mlp_lab_o_size = 400
         outstream.write(self.log_heading_suff)
 
         perfs = []
-        for t in ['a', 'l', 'ah', 'lh']:
+        for t in ['a', 'l', 'ah', 'lh', 'as', 'ls', 'av', 'lv']:
             if t in task2accs:
                 perfs.append("%5.2f" % task2accs[t][epoch - 1]) # epoch -1 cf. epochs start at 1, but rank start at 0
             else:
@@ -839,7 +901,7 @@ mlp_lab_o_size = 400
           
     def build_log_suff(self):
         # Fscore for tasks a, l, ah, lh (ah = n best-scored arcs, n computed with nbheads task (h))
-        self.log_heading_suff = '\t'.join([ 'RESULT', 'corpus', 'Fa', 'Fl', 'Fah', 'Flh', 'effective nb epochs', 'g or t', 'tasks' ] )
+        self.log_heading_suff = '\t'.join([ 'RESULT', 'corpus', 'Fa', 'Fl', 'Fah', 'Flh', 'Fas', 'Fls', 'Fav', 'Flv', 'effective nb epochs', 'g or t', 'tasks' ] )
         if self.graph_mode:
             self.log_values_suff = 'graph\t'
         else:

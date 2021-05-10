@@ -71,6 +71,8 @@ if __name__ == "__main__":
 #    argparser.add_argument('-i', '--lab_loss_weight', help='label loss weight w (arc loss will be 1 - w). Default=0.3', type=float, default=0.3)
 #    argparser.add_argument('--pos_arc_weight', help='(for graph mode only) weight for positive arcs in binary cross-entropy. Default=1.5', type=float, default=1.5)
     argparser.add_argument('-n', '--nb_epochs', help='Max nb epochs. Default=40', type=int, default=40)
+    argparser.add_argument('--mtl_sharing_level', help='Sharing level for MTL. 1: shared until bilstm, 2:extra MLP shared. Default: 1', type=int, default=1)
+    argparser.add_argument('--coeff_aux_task_as_input', help='"None" or dot-separated list of task:coeff pairs, with task s and/or h. Example: "s:5.h15", Default=""', default='None')
 #    argparser.add_argument('--nb_epochs_arc_only', help='Nb epocs to run using arc loss only. Default=0', type=int, default=0)
     argparser.add_argument('--device_id', help='GPU cuda device id. Default=0', type=int, default=0)
     argparser.add_argument('-t', '--trace', action="store_true", help='print some traces. Default=False', default=False)
@@ -138,6 +140,22 @@ if __name__ == "__main__":
             w_emb_file = None
             use_pretrained_w_emb = False
 
+        # -----  task definition ----------------------------
+        tasks = args.tasks.lower().split('.')
+        if sum([ int(t not in ['a','l','h','d','s','b']) for t in tasks ]) > 0:
+          exit("ERROR: tasks should be among a l h d s b")
+        coeffs = {}
+        if args.coeff_aux_task_as_input != 'None':
+          c = args.coeff_aux_task_as_input
+          for x in c.strip().split('.'):
+            (t, v) = x.split(':')
+            v = int(v)
+            if t in tasks and t in ['s', 'h']:
+                coeffs[t] = v
+            else:
+                print("WARNING coeff_aux_task_as_input %s incoherent, skipping %s : %d " % (c, t, v))
+            
+
         # ------------- INDICES ------------------------------
         # indices are defined on train sentences only
         print('indices...')
@@ -153,9 +171,6 @@ if __name__ == "__main__":
                 data[part] = DepTreeDataSet(part, sentences[part], indices, DEVICE)
 
         # ------------- THE PARSER ---------------------------
-        tasks = args.tasks.lower().split('.')
-        if sum([ int(t not in ['a','l','h','d','s','b']) for t in tasks ]) > 0:
-          exit("ERROR: tasks should be among a l h d s b")
         biaffineparser = BiAffineParser(indices, DEVICE, tasks,
                                         w_emb_size=args.w_emb_size,
                                         l_emb_size=args.l_emb_size,
@@ -168,6 +183,8 @@ if __name__ == "__main__":
                                         bert_name=args.bert_name,
                                         reduced_bert_size=args.reduced_bert_size,
                                         freeze_bert=args.freeze_bert,
+                                        mtl_sharing_level=args.mtl_sharing_level,
+                                        coeff_aux_task_as_input=coeffs,
         )
 
         # pour tests plus rapides: utiliser training sur val
