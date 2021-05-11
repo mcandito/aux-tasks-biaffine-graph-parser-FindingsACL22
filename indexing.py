@@ -66,7 +66,7 @@ class Indices:
             slabseq2occ[s] +=1
           known_slabseqs = sorted(slabseq2occ.keys(), key=lambda x: slabseq2occ[x], reverse=True)
           # keep only the 30 most freq (others will get the UNK_ID)
-          i2s = [PAD_SYMB, UNK_SYMB] + known_slabseqs[:30]
+          i2s = [PAD_SYMB, UNK_SYMB] + known_slabseqs[:50]
           # symbols to indices
           s2i = {x:i for i,x in enumerate(i2s)}    
           self.vocabs['slabseq'] = {'i2s': i2s, 's2i': s2i}
