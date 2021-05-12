@@ -611,6 +611,7 @@ mlp_lab_o_size = 400
           # from mask [b,d] to mask [b,d,num_labels+1]
           bol_pad_mask = linear_pad_mask.unsqueeze(2).expand(-1,-1,self.num_labels) #@@ +1)
           nb_incorrect = torch.sum(torch.any(((pred_bols != bols).int() * bol_pad_mask).bool(), dim=2).int())
+          nb_toks = linear_pad_mask.sum().item()          
           task2nbcorrect['b'] = nb_toks - nb_incorrect.item()
           task2preds['b'] = pred_bols
 
