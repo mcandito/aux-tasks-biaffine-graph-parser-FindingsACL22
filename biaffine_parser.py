@@ -1168,7 +1168,7 @@ mlp_lab_o_size = 400
                 if 's' in task2preds:
                     ipred = task2preds['s'][b,d]
                     pred = self.indices.i2s('slabseq', ipred)
-                    out.append('slabseq:%s%s' % ('' if ipred = slabseqs[b,d] else 'WRONG_SLABSEQ:', pred))
+                    out.append('slabseq:%s%s' % ('' if ipred == slabseqs[b,d] else 'WRONG_SLABSEQ:', pred))
                     
 
                 # TODO HERE : dump nbheads / slabseqs, and mark INCORRECT ones
