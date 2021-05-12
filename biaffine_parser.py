@@ -492,9 +492,9 @@ mlp_lab_o_size = 400
 
         # --- Prediction and evaluation --------------------------
         # provide the batch, and all the output of the forward pass
-        task2nbcorrect, _, _, _ = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask, 
-                                                                  S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs,
-                                                                  study_alt)
+        task2nbcorrect, _, _, _, _ = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask, 
+                                                                     S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs,
+                                                                     study_alt)
  
         return loss, task2loss, task2nbcorrect, nb_toks
 
@@ -574,6 +574,7 @@ mlp_lab_o_size = 400
       lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols, slabseqs = batch
 
       task2nbcorrect = defaultdict(int)
+      task2preds = {}
 
       # --- Prediction and evaluation --------------------------
       with torch.no_grad():
@@ -595,10 +596,12 @@ mlp_lab_o_size = 400
         if 'h' in self.task2i:
           pred_nbheads = torch.round(torch.exp(log_pred_nbheads) - 1)
           task2nbcorrect['h'] = torch.sum((pred_nbheads == gold_nbheads).int() * linear_pad_mask).item()
+          task2preds['h'] = pred_nbheads
 
         if 'd' in self.task2i:
           pred_nbdeps = torch.round(torch.exp(log_pred_nbdeps) - 1)
           task2nbcorrect['d'] = torch.sum((pred_nbdeps == gold_nbdeps).int() * linear_pad_mask).item()
+          task2preds['d'] = pred_nbdeps
 
         if 'b' in self.task2i:
           pred_bols = torch.round(torch.exp(log_pred_bols) - 1) # [b, d, num_labels+1]
@@ -609,12 +612,14 @@ mlp_lab_o_size = 400
           bol_pad_mask = linear_pad_mask.unsqueeze(2).expand(-1,-1,self.num_labels) #@@ +1)
           nb_incorrect = torch.sum(torch.any(((pred_bols != bols).int() * bol_pad_mask).bool(), dim=2).int())
           task2nbcorrect['b'] = nb_toks - nb_incorrect.item()
+          task2preds['b'] = pred_bols
 
         if 's' in self.task2i:
           pred_slabseqs = torch.argmax(scores_slabseqs, dim=2) # [b, d]
           task2nbcorrect['s'] = torch.sum((pred_slabseqs == slabseqs).int() * linear_pad_mask).item()
           # count the unk slabseq as incorrect
           task2nbcorrect['sknown'] = task2nbcorrect['s'] - torch.sum((pred_slabseqs == UNK_ID).int() * linear_pad_mask).item()
+          task2preds['s'] = pred_slabseqs
 
         # alternative ways to predict arcs
         alt_pred_arcs = {}
@@ -643,7 +648,6 @@ mlp_lab_o_size = 400
               alt_pred_arcs['v'] = torch.zeros(S_arc.shape)
 
           # predict the top most arcs according to various nbheads
-
           s, indices = torch.sort(S_arc, dim=1) # sort the scores of the arcs
           (bs, m, m) = S_arc.shape
           for b in range(bs):
@@ -664,18 +668,19 @@ mlp_lab_o_size = 400
                         if h < (m - int_nbheads_list[t]):
                           alt_pred_arcs[t][b, indices[b, h, d], d] = 0
                         else: 
-                          alt_pred_arcs[t][b, indices[b, h, d], d] = 1          
+                          alt_pred_arcs[t][b, indices[b, h, d], d] = 1
+          # evaluate the alternative arc predictions
           for t in alt_pred_arcs.keys(): 
             alt_pred_arcs[t] = alt_pred_arcs[t].to(self.device) * pad_masks
             nb_correct_u = torch.sum((alt_pred_arcs[t] * arc_adja).int()).item()
             nb_pred = torch.sum(alt_pred_arcs[t]).item()
             task2nbcorrect['a' + t] = (nb_correct_u, nb_gold, nb_pred)
-            # the pred labels contains the best label for all (h,d) pairs, 
+            # pred_labels contains the best label for all (h,d) pairs, 
             # and thus are common to any arc prediction style
             nb_correct_u_and_l = torch.sum((pred_labels == lab_adja).float() * alt_pred_arcs[t]).item()
             task2nbcorrect['l' + t] = (nb_correct_u_and_l, nb_gold, nb_pred)
 
-      return task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs
+      return task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs, task2preds
 
     def train_model(self, train_data, val_data, data_name, out_model_file, log_stream, nb_epochs, batch_size, lr, lex_dropout, graph_mode=True):
         """
@@ -972,8 +977,8 @@ mlp_lab_o_size = 400
           gold_nbheads = arc_adja.sum(dim=1).float() # [b, h, d] => [b, d]
           gold_nbdeps = arc_adja.sum(dim=2).float()  # [b, h, d] => [b, h]
           linear_pad_mask = pad_masks[:,0,:] 
-          task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask,
-                                                                                                  S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs)
+          task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs, task2preds = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask,
+                                                                                                              S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs)
           for k in self.tasks:
             if k in ['a','l']: 
               for i in [0,1,2]:
@@ -1001,8 +1006,16 @@ mlp_lab_o_size = 400
                 #     # evaluation
                 #     nb_gold, nb_pred, nb_correct_u, nb_correct_u_and_l = self.evaluate_tree_mode(batch, pred_heads, pred_labels)
 
+          if out_file:
+            # TODO: pass several files for several outputs , cf. alt_pred_arcs : alternative ways to predict arcs
+            if self.graph_mode:
+                self.dump_predictions_graph_mode(batch, pred_arcs, pred_labels, out_stream, task2preds)
+            # TODO update, not working currently
+            else:
+                self.dump_predictions_tree_mode(batch, pred_heads, pred_labels, out_stream)
 
-        # for the full test set
+        # end loop on batches        
+
         print("Test: nb toks " + str(test_nb_toks) + "/ " + " / ".join([t.upper()+":"+str(test_task2nbcorrect[t]) for t in self.tasks]))              
         for k in self.tasks:
           if k in ['a', 'l']:
@@ -1010,14 +1023,6 @@ mlp_lab_o_size = 400
           elif k != 'g':
             test_task2acc[k] = 100 * test_task2nbcorrect[k] / test_nb_toks
 
-        if out_file:
-            # TODO: pass several files for several outputs , cf. alt_pred_arcs : alternative ways to predict arcs
-            if self.graph_mode:
-                self.dump_predictions_graph_mode(batch, pred_arcs, pred_labels, out_stream)
-            # TODO update, not working currently
-            else:
-                self.dump_predictions_tree_mode(batch, pred_heads, pred_labels, out_stream)
-                
 
         return test_task2nbcorrect, test_task2acc
 
@@ -1095,9 +1100,11 @@ mlp_lab_o_size = 400
 
             out_stream.write('\n')
 
-# TODO UPDATE
-    def dump_predictions_graph_mode(self, batch, pred_arcs, pred_labels, out_stream):
-        """ dump gold and predictions into file """
+    def dump_predictions_graph_mode(self, batch, pred_arcs, pred_labels, out_stream, task2preds=None):
+        """ dump gold and predictions into file 
+
+        task2preds : predictions for auxiliary tasks h, s, d, b
+        """
         lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols, slabseqs = batch
 
         (batch_size, n) = forms.size() 
@@ -1110,6 +1117,12 @@ mlp_lab_o_size = 400
         else:
             start = 0
             add = 1
+
+        if not task2preds:
+            task2preds = {}
+        elif 's' in task2preds:
+            nbheads_from_s, bols_from_s = self.indices.interpret_slabseqs(task2preds['s'])
+
         for b in range(batch_size):     # sent in batch
             for d in range(start, n):   # tok in sent (skiping root token)
                 if forms[b,d] == PAD_ID:
@@ -1136,10 +1149,34 @@ mlp_lab_o_size = 400
                     else:
                         out.append('_')
                         out.append('_')
+                # nb heads
+                nbheads = {}
+                nbheads['gold'] = len(gpairs)
+                nbheads['a'] = len(ppairs)
+                out.append('a:%s%d' % ( '' if nbheads['a'] == nbheads['gold'] else 'WRONG_A:' , nbheads['a']))
+
+                # nb heads from aux task h
+                if 'h' in task2preds:
+                    nbheads['h'] = task2preds['h'][b,d].item()
+                    out.append('h:%s%d' % ( '' if nbheads['h'] == nbheads['gold'] else 'WRONG_H:' , nbheads['h']))
+                    # nb heads from aux task s
+                    if 's' in task2preds:
+                        nbheads['s'] = nbheads_from_s[b, d].item()
+                        out.append('s:%s%d' % ( '' if nbheads['s'] == nbheads['gold'] else 'WRONG_S:' , nbheads['s']))
+
+                # slabseq
+                if 's' in task2preds:
+                    ipred = task2preds['s'][b,d]
+                    pred = self.indices.i2s('slabseq', ipred)
+                    out.append('slabseq:%s%s' % ('' if ipred = slabseqs[b,d] else 'WRONG_SLABSEQ:', pred))
                     
+
+                # TODO HERE : dump nbheads / slabseqs, and mark INCORRECT ones
                 out_stream.write('\t'.join(out) + '\n')
 
             out_stream.write('\n')
+
+# TODO: à tester sur une sortie a.l.s.h
 
 
             
