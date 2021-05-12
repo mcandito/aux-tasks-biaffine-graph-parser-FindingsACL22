@@ -146,10 +146,12 @@ class Indices:
           flat_nbheads[i] = -1
         else:
           slabseq = self.i2s('slabseq', islabseq)
-          ilabels = [ self.s2i('label', label) for label in slabseq.split('|') ]
-          for ilab in ilabels:
-            flat_bols[i,ilab] += 1
-            flat_nbheads[i] += 1
+          # if label is not '' (i.e. if the dependent has at least one governor)
+          if slabseq:
+            ilabels = [ self.s2i('label', label) for label in slabseq.split('|') ]
+            for ilab in ilabels:
+                flat_bols[i,ilab] += 1
+                flat_nbheads[i] += 1
       # reshaping to input shape
       input_size = slabseqs.size()
       return flat_nbheads.view(input_size), flat_bols.view(list(input_size) + [num_labels])
