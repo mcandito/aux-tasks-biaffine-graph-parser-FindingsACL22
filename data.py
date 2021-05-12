@@ -207,6 +207,11 @@ def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, us
     return sentences
 
 def get_label(label, use_canonical_gf=True):
+    """ returns '' for S or I arcs
+    otherwise return the label:
+    - the canonical function if use_canonical_gf is True
+    - the final function otherwise
+    """
     if label.startswith("S:") or label.startswith("I:"):
         return ''
     if label.startswith('D:'):
@@ -232,6 +237,7 @@ def get_deep_govs(govs, labels, use_canonical_gf=True):
     """
     govs = [int(x) for x in govs.split("|")]
     labels = [get_label(x, use_canonical_gf) for x in labels.split("|")]
+    # filter out the gov/label pairs for which the label is '' (cf. get_label)
     filtered = filter(lambda x: x[1], zip(govs, labels))
     f = list(zip(*filtered))
     if not(f):
