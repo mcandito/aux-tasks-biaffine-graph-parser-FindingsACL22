@@ -666,6 +666,8 @@ mlp_lab_o_size = 400
                   int_nbheads_list = {}
                   if 'h' in alt_pred_arcs:
                     int_nbheads_list['h'] = pred_nbheads[b,d].item()
+                  if 'b' in alt_pred_arcs:
+                    int_nbheads_list['b'] = nbheads_from_b[b,d].item()
                   if 's' in alt_pred_arcs:
                     # fall back on task h if unknown slabseq
                     if nbheads_from_s[b,d] == -1 and 'h' in alt_pred_arcs:
