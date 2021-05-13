@@ -635,16 +635,26 @@ mlp_lab_o_size = 400
             # recompute the nb of heads predicted using the 'a' task
             nbheads_from_a = torch.sum(pred_arcs, dim=1) # b, d
             # alt_pred_arcs['a'] useless, cf. this is already the 'a' task
+          if 'b' in self.tasks:
+            nbheads_from_b = torch.sum(pred_bols, dim=2) # b, d, num_labels => b, d
+            alt_pred_arcs['b'] = torch.zeros(S_arc.shape)
           if 's' in self.tasks:
             nbheads_from_s, bols_from_s = self.indices.interpret_slabseqs(pred_slabseqs)
             nbheads_from_s = nbheads_from_s.to(self.device)
             alt_pred_arcs['s'] = torch.zeros(S_arc.shape)
-            if 'a' in self.tasks and 'h' in self.tasks:
-              uninterpretable = (nbheads_from_s == -1).int() # cases for which output slabseq is not interpretable
-              interpretable = (nbheads_from_s != -1).int()
-              # majority vote on the 3 kinds of prediction of nbheads 
+          if 'a' in self.tasks and 'h' in self.tasks and 's' in self.tasks:
+            uninterpretable = (nbheads_from_s == -1).int() # cases for which output slabseq is not interpretable
+            interpretable = (nbheads_from_s != -1).int()
+            # majority vote on a, h, s
+            if 'b' not in self.tasks:
               nbheads_from_v = torch.round(((nbheads_from_a + nbheads_from_s + pred_nbheads) * interpretable / 3) # will yield 0 if score 0 or 1, and 1 if score 2 or 3
                                             + (pred_nbheads * uninterpretable)) # when s in unavailable, use nbheads from task h
+              task2nbcorrect['v'] = torch.sum((nbheads_from_v == gold_nbheads).int() * linear_pad_mask).item()
+              alt_pred_arcs['v'] = torch.zeros(S_arc.shape)
+            # else majority vote on b, h, s if s is known, else on b, h, a
+            else:
+              nbheads_from_v = torch.round(((nbheads_from_b + nbheads_from_s + pred_nbheads) * interpretable / 3) # will yield 0 if score 0 or 1, and 1 if score 2 or 3
+                                            + ((nbheads_from_a + nbheads_from_s + pred_nbheads) * uninterpretable / 3)) # when s in unavailable, use nbheads from task h
               task2nbcorrect['v'] = torch.sum((nbheads_from_v == gold_nbheads).int() * linear_pad_mask).item()
               alt_pred_arcs['v'] = torch.zeros(S_arc.shape)
 
