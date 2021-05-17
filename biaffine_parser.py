@@ -856,17 +856,24 @@ mlp_lab_o_size = 400
                 # nb: when label loss comes into play, it might artificially increase the overall loss
                 #     => we don't early stop at this stage 
                 #elif (val_losses[-1] < val_losses[-2]) or (epoch == self.nb_epochs_arc_only) :
-                elif val_task2accs['l'][-1] > val_task2accs['l'][-2] :
+                # early stopping if all the L* perfs have decreased
+                else:
+                  stop = True
+                  for t in [ x for x in val_task2accs.keys() if x.startswith("l")]:
+                    if val_task2accs[t][-1] > val_task2accs[t][-2] :
+                      stop = False
+                      break
+                  if not stop:
                     for stream in [sys.stdout, log_stream]:
                         #stream.write("Validation loss has decreased, saving model, current nb epochs = %d\n" % epoch)
-                        stream.write("Validation L perf has increased, saving model, current nb epochs = %d\n" % epoch)
+                        stream.write("Validation L* perf has increased, saving model, current nb epochs = %d\n" % epoch)
                     torch.save(self, out_model_file)
                 # otherwise: early stopping, stop training, reload previous model
                 # NB: the model at last epoch was not saved yet
                 # => we can reload the model from the previous storage
                 else:
                     #print("Validation loss has increased, reloading previous model, and stop training\n")
-                    print("Validation L perf has decreased, reloading previous model, and stop training\n")
+                    print("Validation L* perf has decreased, reloading previous model, and stop training\n")
                     self.log_best_perf(log_stream, 'val', epoch - 1, val_task2accs)
                     # reload (on the appropriate device)
                     # cf. https://pytorch.org/docs/stable/generated/torch.load.html#torch-load
