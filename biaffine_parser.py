@@ -1037,7 +1037,7 @@ mlp_lab_o_size = 400
               for task in alt_pred_arcs:
                 if task not in task2stream:
                   task2stream[task] = open(out_file + '.' + task, 'w')
-                self.dump_predictions_graph_mode(batch, alt_pred_arcs[task], pred_labels, task2steam[task], task2preds)
+                self.dump_predictions_graph_mode(batch, alt_pred_arcs[task], pred_labels, task2stream[task], task2preds)
             # TODO update, not working currently
             else:
                 self.dump_predictions_tree_mode(batch, pred_heads, pred_labels, out_stream)
