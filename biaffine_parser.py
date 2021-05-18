@@ -1029,7 +1029,7 @@ mlp_lab_o_size = 400
 
           if out_file:
             if self.graph_mode:
-              self.dump_predictions_graph_mode(batch, pred_arcs, pred_labels, out_streams['l'], task2preds)
+              self.dump_predictions_graph_mode(batch, pred_arcs, pred_labels, task2stream['l'], task2preds)
               for task in alt_pred_arcs:
                 if task not in task2stream:
                   task2stream[task] = open(out_file + '.' + task, 'w')
