@@ -962,10 +962,11 @@ mlp_lab_o_size = 400
       if out_file is set, prediction will be dumped in readable format in out_file
       """
       # TODO: tree mode
-      # TODO: pass several files for several outputs , cf. alt_pred_arcs : alternative ways to predict arcs
 
+      # potentially several outputs, using different prediction modes
+      task2stream = {}
       if out_file != None:
-        out_stream = open(out_file, 'w')
+        task2stream['l'] = open(out_file + '.l', 'w')
       
       self.eval()
       test_nb_toks = 0
@@ -1027,9 +1028,12 @@ mlp_lab_o_size = 400
                 #     nb_gold, nb_pred, nb_correct_u, nb_correct_u_and_l = self.evaluate_tree_mode(batch, pred_heads, pred_labels)
 
           if out_file:
-            # TODO: pass several files for several outputs , cf. alt_pred_arcs : alternative ways to predict arcs
             if self.graph_mode:
-                self.dump_predictions_graph_mode(batch, pred_arcs, pred_labels, out_stream, task2preds)
+              self.dump_predictions_graph_mode(batch, pred_arcs, pred_labels, out_streams['l'], task2preds)
+              for task in alt_pred_arcs:
+                if task not in task2stream:
+                  task2stream[task] = open(out_file + '.' + task, 'w')
+                self.dump_predictions_graph_mode(batch, alt_pred_arcs[task], pred_labels, task2steam[task], task2preds)
             # TODO update, not working currently
             else:
                 self.dump_predictions_tree_mode(batch, pred_heads, pred_labels, out_stream)
@@ -1191,7 +1195,6 @@ mlp_lab_o_size = 400
                     out.append('slabseq:%s%s' % ('' if ipred == slabseqs[b,d] else 'WRONG_SLABSEQ:', pred))
                     
 
-                # TODO HERE : dump nbheads / slabseqs, and mark INCORRECT ones
                 out_stream.write('\t'.join(out) + '\n')
 
             out_stream.write('\n')
