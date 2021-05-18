@@ -871,7 +871,7 @@ mlp_lab_o_size = 400
                 # otherwise: early stopping, stop training, reload previous model
                 # NB: the model at last epoch was not saved yet
                 # => we can reload the model from the previous storage
-                else:
+                  else:
                     #print("Validation loss has increased, reloading previous model, and stop training\n")
                     print("Validation L* perf has decreased, reloading previous model, and stop training\n")
                     self.log_best_perf(log_stream, 'val', epoch - 1, val_task2accs)
