@@ -964,11 +964,11 @@ mlp_lab_o_size = 400
       # TODO: tree mode
 
       # potentially several outputs, using different prediction modes
+      task2stream = {}
       if out_file != None:
         make_alt_preds = True
         task2stream['l'] = open(out_file + '.l', 'w')
       else:
-        task2stream = {}
         make_alt_preds = False
           
       
