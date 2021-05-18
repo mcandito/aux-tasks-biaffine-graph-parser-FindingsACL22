@@ -378,11 +378,11 @@ mlp_lab_o_size = 400
 
         return S_arc, S_lab, log_nbheads, log_nbdeps, bols, S_slabseqs
     
-    def batch_forward_and_loss(self, batch, trace_first=False, study_alt=False):
+    def batch_forward_and_loss(self, batch, trace_first=False, make_alt_preds=False):
         """
         - batch of sentences (output of make_batches)
 
-        - study_alt : study alternative ways of make predictions
+        - make_alt_preds : study alternative ways of make predictions
         
         NB: pertains in graph mode only !!
           - in arc_adja (resp. lab_adja), cells equal 1 for gold arcs
@@ -494,7 +494,7 @@ mlp_lab_o_size = 400
         # provide the batch, and all the output of the forward pass
         task2nbcorrect, _, _, _, _ = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask, 
                                                                      S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs,
-                                                                     study_alt)
+                                                                     make_alt_preds)
  
         return loss, task2loss, task2nbcorrect, nb_toks
 
@@ -568,7 +568,7 @@ mlp_lab_o_size = 400
     def batch_predict_and_evaluate(self, batch, 
                                    gold_nbheads, gold_nbdeps, linear_pad_mask, # computed in batch_forward_and_loss
                                    S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs, # output by forward pass
-                                   study_alt=False # whether to study other prediction algorithms
+                                   make_alt_preds=False # whether to study other prediction algorithms
                                    ):
 
       lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols, slabseqs = batch
@@ -624,7 +624,7 @@ mlp_lab_o_size = 400
 
         # alternative ways to predict arcs
         alt_pred_arcs = {}
-        if study_alt:
+        if make_alt_preds:
           # tensors for other ways to predict arcs, 
           #           according to best xxx scores for each dependent d
           #           with xxx being the nbheads predicted using tasks h, s, or v
@@ -817,14 +817,14 @@ mlp_lab_o_size = 400
                 with torch.no_grad():
                     trace_first = True
                     for batch in val_data.make_batches(self.batch_size, sort_dec_length=True):
-                        loss, task2loss, task2nbcorrect, nb_toks = self.batch_forward_and_loss(batch, trace_first=trace_first, study_alt=True)
+                        loss, task2loss, task2nbcorrect, nb_toks = self.batch_forward_and_loss(batch, trace_first=trace_first, make_alt_preds=True)
                         val_loss += loss.item()
                         val_nb_toks += nb_toks
                         for k in task2nbcorrect.keys():
                           if k in task2loss:
                             val_task2loss[k] += task2loss[k]
                           if type(task2nbcorrect[k]) != int: # tuple or list 
-                            if k not in val_task2nbcorrect: # those that are not registered yet are the study_alt, and are only fscore-like
+                            if k not in val_task2nbcorrect: # those that are not registered yet are the make_alt_preds, and are only fscore-like
                               val_task2nbcorrect[k] = [0,0,0]
                             for i in [0,1,2]:
                               val_task2nbcorrect[k][i] += task2nbcorrect[k][i]
@@ -964,9 +964,13 @@ mlp_lab_o_size = 400
       # TODO: tree mode
 
       # potentially several outputs, using different prediction modes
-      task2stream = {}
       if out_file != None:
+        make_alt_preds = True
         task2stream['l'] = open(out_file + '.l', 'w')
+      else:
+        task2stream = {}
+        make_alt_preds = False
+          
       
       self.eval()
       test_nb_toks = 0
@@ -999,7 +1003,7 @@ mlp_lab_o_size = 400
           gold_nbdeps = arc_adja.sum(dim=2).float()  # [b, h, d] => [b, h]
           linear_pad_mask = pad_masks[:,0,:] 
           task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs, task2preds = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask,
-                                                                                                              S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs)
+                                                                                                              S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs, make_alt_preds=make_alt_preds)
           for k in self.tasks:
             if k in ['a','l']: 
               for i in [0,1,2]:
