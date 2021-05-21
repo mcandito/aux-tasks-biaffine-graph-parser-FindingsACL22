@@ -647,14 +647,14 @@ mlp_lab_o_size = 400
             interpretable = (nbheads_from_s != -1).int()
             # majority vote on a, h, s
             if 'b' not in self.tasks:
-              nbheads_from_v = torch.round(((nbheads_from_a + nbheads_from_s + pred_nbheads) * interpretable / 3).int() # will yield 0 if score 0 or 1, and 1 if score 2 or 3
+              nbheads_from_v = torch.round(((nbheads_from_a + nbheads_from_s + pred_nbheads) * interpretable / 3.).int() # will yield 0 if score 0 or 1, and 1 if score 2 or 3
                                             + (pred_nbheads * uninterpretable)) # when s in unavailable, use nbheads from task h
               task2nbcorrect['v'] = torch.sum((nbheads_from_v == gold_nbheads).int() * linear_pad_mask).item()
               alt_pred_arcs['v'] = torch.zeros(S_arc.shape)
             # else majority vote on b, h, s if s is known, else on b, h, a
             else:
-              nbheads_from_v = torch.round(((nbheads_from_b + nbheads_from_s + pred_nbheads) * interpretable / 3) # will yield 0 if score 0 or 1, and 1 if score 2 or 3
-                                            + ((nbheads_from_a + nbheads_from_s + pred_nbheads) * uninterpretable / 3)).int() # when s in unavailable, use nbheads from task h
+              nbheads_from_v = torch.round(((nbheads_from_b + nbheads_from_s + pred_nbheads) * interpretable / 3.) # will yield 0 if score 0 or 1, and 1 if score 2 or 3
+                                            + ((nbheads_from_a + nbheads_from_s + pred_nbheads) * uninterpretable / 3.)).int() # when s in unavailable, use nbheads from task h
               task2nbcorrect['v'] = torch.sum((nbheads_from_v == gold_nbheads).int() * linear_pad_mask).item()
               alt_pred_arcs['v'] = torch.zeros(S_arc.shape)
 
