@@ -594,17 +594,17 @@ mlp_lab_o_size = 400
 
         # NB: round predicted numbers of heads / deps for evaluation only
         if 'h' in self.task2i:
-          pred_nbheads = torch.round(torch.exp(log_pred_nbheads) - 1)
+          pred_nbheads = torch.round(torch.exp(log_pred_nbheads) - 1).int()
           task2nbcorrect['h'] = torch.sum((pred_nbheads == gold_nbheads).int() * linear_pad_mask).item()
           task2preds['h'] = pred_nbheads
 
         if 'd' in self.task2i:
-          pred_nbdeps = torch.round(torch.exp(log_pred_nbdeps) - 1)
+          pred_nbdeps = torch.round(torch.exp(log_pred_nbdeps) - 1).int()
           task2nbcorrect['d'] = torch.sum((pred_nbdeps == gold_nbdeps).int() * linear_pad_mask).item()
           task2preds['d'] = pred_nbdeps
 
         if 'b' in self.task2i:
-          pred_bols = torch.round(torch.exp(log_pred_bols) - 1) # [b, d, num_labels+1]
+          pred_bols = torch.round(torch.exp(log_pred_bols) - 1).int() # [b, d, num_labels+1]
           # nb of b , d pairs (token d in batch instance b) for which the full predicted bol is correct
           #   i.e. nb_toks minus the number of b,d pairs for which 
           #        there is at least (torch.any) one label dim differing (!=) between gold and predicted
@@ -647,21 +647,27 @@ mlp_lab_o_size = 400
             interpretable = (nbheads_from_s != -1).int()
             # majority vote on a, h, s
             if 'b' not in self.tasks:
-              nbheads_from_v = torch.round(((nbheads_from_a + nbheads_from_s + pred_nbheads) * interpretable / 3) # will yield 0 if score 0 or 1, and 1 if score 2 or 3
+              nbheads_from_v = torch.round(((nbheads_from_a + nbheads_from_s + pred_nbheads) * interpretable / 3).int() # will yield 0 if score 0 or 1, and 1 if score 2 or 3
                                             + (pred_nbheads * uninterpretable)) # when s in unavailable, use nbheads from task h
               task2nbcorrect['v'] = torch.sum((nbheads_from_v == gold_nbheads).int() * linear_pad_mask).item()
               alt_pred_arcs['v'] = torch.zeros(S_arc.shape)
             # else majority vote on b, h, s if s is known, else on b, h, a
             else:
               nbheads_from_v = torch.round(((nbheads_from_b + nbheads_from_s + pred_nbheads) * interpretable / 3) # will yield 0 if score 0 or 1, and 1 if score 2 or 3
-                                            + ((nbheads_from_a + nbheads_from_s + pred_nbheads) * uninterpretable / 3)) # when s in unavailable, use nbheads from task h
+                                            + ((nbheads_from_a + nbheads_from_s + pred_nbheads) * uninterpretable / 3)).int() # when s in unavailable, use nbheads from task h
               task2nbcorrect['v'] = torch.sum((nbheads_from_v == gold_nbheads).int() * linear_pad_mask).item()
               alt_pred_arcs['v'] = torch.zeros(S_arc.shape)
 
-          # predict the top most arcs according to various nbheads
-          s, indices = torch.sort(S_arc, dim=1) # sort the scores of the arcs
+          # --- predict the top most arcs according to various nbheads ---
+          # sort the scores of the arcs in ascending order
+          # before sorting:
+          # set the padded cells to min score in all the batch
+          min_arc_score = torch.min(S_arc).item() - 1
+          S_arc_padded = (S_arc * pad_masks) + (1 - pad_masks) * min_arc_score 
+          s, indices = torch.sort(S_arc_padded, dim=1) 
           (bs, m, m) = S_arc.shape
           for b in range(bs):
+              # get the number of heads for each d, according to the various nbheads
               for d in range(m): # d
                   int_nbheads_list = {}
                   if 'h' in alt_pred_arcs:
@@ -676,12 +682,20 @@ mlp_lab_o_size = 400
                       int_nbheads_list['s'] = nbheads_from_s[b,d].item()
                   if 'v' in alt_pred_arcs:
                     int_nbheads_list['v'] = nbheads_from_v[b,d].item()
-                  for h in range(m): # h
-                      for t in int_nbheads_list: # 3 ways to get the nbheads
-                        if h < (m - int_nbheads_list[t]):
-                          alt_pred_arcs[t][b, indices[b, h, d], d] = 0
-                        else: 
+                  # => we keep the *last* int_nbheads_list[t] heads in the sorted heads
+                  for t in int_nbheads_list: # different ways to get the nbheads
+                      nbheads = int_nbheads_list[t]
+                      for i in range(nbheads):
+                          h = m - i - 1 # get the m-i th last score
                           alt_pred_arcs[t][b, indices[b, h, d], d] = 1
+                  #for h in range(m): 
+                  #    # arc is predicted if
+                  #      if h < (m - int_nbheads_list[t]):
+                  #        alt_pred_arcs[t][b, indices[b, h, d], d] = 0
+                  #      else: 
+                  #        alt_pred_arcs[t][b, indices[b, h, d], d] = 1
+
+        
           # evaluate the alternative arc predictions
           for t in alt_pred_arcs.keys(): 
             alt_pred_arcs[t] = alt_pred_arcs[t].to(self.device) * pad_masks
@@ -991,11 +1005,12 @@ mlp_lab_o_size = 400
           linear_pad_mask = pad_masks[:,0,:] # from [b, m, m] to [b, m]
           test_nb_toks += linear_pad_mask.sum().item()
 
-          if 'h' in self.task2i:
-            pred_nbheads = torch.round(torch.exp(log_pred_nbheads) - 1)
+          #@@useless in the end
+          #if 'h' in self.task2i:
+          #  pred_nbheads = torch.round(torch.exp(log_pred_nbheads) - 1)
 
-          if 'd' in self.task2i:
-            pred_nbdeps = torch.round(torch.exp(log_pred_nbdeps) - 1)
+          #if 'd' in self.task2i:
+          #  pred_nbdeps = torch.round(torch.exp(log_pred_nbdeps) - 1)
 
           # --- Prediction and evaluation --------------------------
           # provide the batch, and all the output of the forward pass
