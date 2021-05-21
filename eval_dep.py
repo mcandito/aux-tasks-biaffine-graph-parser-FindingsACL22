@@ -296,7 +296,7 @@ for (lseq,o) in s[:50]:
     print('LAB SEQ %15s \tGOLD: %d PRED: %d (DIFF: %d)' % (lseq, o, lseqs2occ['p'][lseq], o - lseqs2occ['p'][lseq]))
 print("\n")
 
-for limit in [20, 30, 40, 50]:
+for limit in [20, 30, 40, 50, 70, 100]:
     print("total nb occs for the first %d most frequent label seqs: %d" % (limit, sum([x[1] for x in s[:limit]])))
     print("total nb occs for label seqs after the first %d most freq lab seq: %d" % (limit, sum([x[1] for x in s[limit:]])))
     print("among which %d are hapaxes" % sum([x[1] for x in s if x[1] == 1]))
@@ -312,7 +312,7 @@ for (slseq,o) in s[:50]:
     print('SORTED LAB SEQ %15s \tGOLD: %d PRED: %d (DIFF: %d)' % (slseq, o, slseqs2occ['p'][slseq], o - slseqs2occ['p'][slseq]))
 print("\n")
 
-for limit in [20, 30, 40, 50]:
+for limit in [20, 30, 40, 50, 70, 100]:
     print("total nb occs for the first %d most frequent sorted label seqs: %d" % (limit, sum([x[1] for x in s[:limit]])))
     print("total nb occs for label seqs after the first %d most freq sorted lab seqs: %d" % (limit, sum([x[1] for x in s[limit:]])))
     print("among which %d are hapaxes" % sum([x[1] for x in s if x[1] == 1]))
