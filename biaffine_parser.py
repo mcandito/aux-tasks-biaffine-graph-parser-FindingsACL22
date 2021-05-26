@@ -1048,11 +1048,11 @@ mlp_lab_o_size = 400
 
           if out_file:
             if self.graph_mode:
-              self.dump_predictions_graph_mode(batch, pred_arcs, pred_labels, task2stream['l'], task2preds)
-              for task in alt_pred_arcs:
-                if task not in task2stream:
-                  task2stream[task] = open(out_file + '.' + task, 'w')
-                self.dump_predictions_graph_mode(batch, alt_pred_arcs[task], pred_labels, task2stream[task], task2preds)
+              self.dump_predictions_graph_mode(batch, pred_arcs, pred_labels, alt_pred_arcs, task2stream['l'], task2preds)
+              #for task in alt_pred_arcs:
+              #  if task not in task2stream:
+              #    task2stream[task] = open(out_file + '.' + task, 'w')
+              #  self.dump_predictions_graph_mode(batch, alt_pred_arcs[task], pred_labels, task2stream[task], task2preds)
             # TODO update, not working currently
             else:
                 self.dump_predictions_tree_mode(batch, pred_heads, pred_labels, out_stream)
@@ -1143,11 +1143,17 @@ mlp_lab_o_size = 400
 
             out_stream.write('\n')
 
-    def dump_predictions_graph_mode(self, batch, pred_arcs, pred_labels, out_stream, task2preds=None):
+    def dump_predictions_graph_mode(self, batch, pred_arcs, pred_labels, alt_pred_arcs, out_stream, task2preds=None):
         """ dump gold and predictions into file 
+
+        pred_arcs :     predicted arcs in A task (i.e. arcs with positive logits)
+        alt_pred_arcs : predicted arcs using XXX best scored arcs, according to various nb heads
 
         task2preds : predictions for auxiliary tasks h, s, d, b
         """
+        if alt_pred_arcs == None:
+            alt_pred_arcs = {}
+            
         lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols, slabseqs = batch
 
         (batch_size, n) = forms.size() 
@@ -1166,6 +1172,12 @@ mlp_lab_o_size = 400
         elif 's' in task2preds:
             nbheads_from_s, bols_from_s = self.indices.interpret_slabseqs(task2preds['s'])
 
+        if alt_pred_arcs:
+            # heading for each batch (to known which columns correspond to which type of arc prediction)
+            attributes = ['ID', 'FORM', 'GH', 'GL']
+            for t in sorted(['a'] + alt_pred_arcs.keys()):
+                attributes += [ t+'H', t+'L' ]
+            out_stream.write("#" + '\t'.join(attributes) + '\n')
         for b in range(batch_size):     # sent in batch
             for d in range(start, n):   # tok in sent (skiping root token)
                 if forms[b,d] == PAD_ID:
@@ -1174,17 +1186,23 @@ mlp_lab_o_size = 400
                 # gold head / label pairs for dependent d
                 gpairs = [ [h, self.indices.i2s('label', lab_adja[b,h,d])] for h in range(n) if lab_adja[b,h,d] != 0 ] # PAD_ID or no arc == 0
                 # predicted head / label pairs for dependent d, for predicted arcs only
-                ppairs = [ [h, self.indices.i2s('label', pred_labels[b,h,d])] for h in range(n) if pred_arcs[b,h,d] != 0 ]
+                ppairs = {}
+                ppairs['a'] = [ [h, self.indices.i2s('label', pred_labels[b,h,d])] for h in range(n) if pred_arcs[b,h,d] != 0 ]
+                for t in alt_pred_arcs:
+                    ppairs[t] = [ [h, self.indices.i2s('label', pred_labels[b,h,d])] for h in range(n) if alt_pred_arcs[t][b,h,d] != 0 ]
 
+                tasks = sorted(ppairs.keys())
                 # marquage bruit / silence
                 for pair in gpairs:
-                    if pair not in ppairs:
-                        pair[1] = 'SIL:' + pair[1]
-                for pair in ppairs:
-                    if pair not in gpairs:
-                        pair[1] = 'NOI:' + pair[1]
+                    for t in tasks:
+                        if pair not in ppairs[t]:
+                            pair[1] = 'SIL'+t+':' + pair[1]
+                for t in tasks:
+                    for pair in ppairs[t]:
+                        if pair not in gpairs:
+                            pair[1] = 'NOI'+t+':' + pair[1]
 
-                for pairs in [gpairs, ppairs]:
+                for pairs in [gpairs] + [ ppairs[t] for t in tasks ]:
                     if len(pairs):
                         hs, ls = zip(*pairs)
                         out.append('|'.join( [ str(x+add) for x in hs ] ))
@@ -1195,17 +1213,22 @@ mlp_lab_o_size = 400
                 # nb heads
                 nbheads = {}
                 nbheads['gold'] = len(gpairs)
-                nbheads['a'] = len(ppairs)
+                nbheads['a'] = len(ppairs['a'])
                 out.append('a:%s%d' % ( '' if nbheads['a'] == nbheads['gold'] else 'WRONG_A:' , nbheads['a']))
 
                 # nb heads from aux task h
                 if 'h' in task2preds:
                     nbheads['h'] = task2preds['h'][b,d].item()
                     out.append('h:%s%d' % ( '' if nbheads['h'] == nbheads['gold'] else 'WRONG_H:' , nbheads['h']))
-                    # nb heads from aux task s
-                    if 's' in task2preds:
-                        nbheads['s'] = nbheads_from_s[b, d].item()
-                        out.append('s:%s%d' % ( '' if nbheads['s'] == nbheads['gold'] else 'WRONG_S:' , nbheads['s']))
+                    if nbheads['h'] != len(ppairs['h']):
+                        out[-1] += ':ERROR nbheads_h:'+ str(nbheads['h']) + ' alt_pred_arcs h:' + str(len(ppairs['h']))
+
+                # nb heads from aux task s
+                if 's' in task2preds:
+                    nbheads['s'] = nbheads_from_s[b, d].item()
+                    out.append('s:%s%d' % ( '' if nbheads['s'] == nbheads['gold'] else 'WRONG_S:' , nbheads['s']))
+                    if nbheads['s'] != len(ppairs['s']):
+                        out[-1] += ':ERROR nbheads_s:'+ str(nbheads['s']) + ' alt_pred_arcs s:' + str(len(ppairs['s']))
 
                 # slabseq
                 if 's' in task2preds:
