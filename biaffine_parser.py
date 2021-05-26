@@ -1184,12 +1184,12 @@ mlp_lab_o_size = 400
                     break
                 out = [str(d+add), self.indices.i2s('w', forms[b,d])] 
                 # gold head / label pairs for dependent d
-                gpairs = [ [h, self.indices.i2s('label', lab_adja[b,h,d])] for h in range(n) if lab_adja[b,h,d] != 0 ] # PAD_ID or no arc == 0
+                gpairs = [ (h, self.indices.i2s('label', lab_adja[b,h,d])) for h in range(n) if lab_adja[b,h,d] != 0 ] # PAD_ID or no arc == 0
                 # predicted head / label pairs for dependent d, for predicted arcs only
                 ppairs = {}
-                ppairs['a'] = [ [h, self.indices.i2s('label', pred_labels[b,h,d])] for h in range(n) if pred_arcs[b,h,d] != 0 ]
+                ppairs['a'] = [ (h, self.indices.i2s('label', pred_labels[b,h,d])) for h in range(n) if pred_arcs[b,h,d] != 0 ]
                 for t in alt_pred_arcs:
-                    ppairs[t] = [ [h, self.indices.i2s('label', pred_labels[b,h,d])] for h in range(n) if alt_pred_arcs[t][b,h,d] != 0 ]
+                    ppairs[t] = [ (h, self.indices.i2s('label', pred_labels[b,h,d])) for h in range(n) if alt_pred_arcs[t][b,h,d] != 0 ]
 
                 tasks = sorted(list(ppairs.keys()))
                 # marquage bruit / silence
