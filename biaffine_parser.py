@@ -1175,7 +1175,7 @@ mlp_lab_o_size = 400
         if alt_pred_arcs:
             # heading for each batch (to known which columns correspond to which type of arc prediction)
             attributes = ['ID', 'FORM', 'GH', 'GL']
-            for t in sorted(['a'] + alt_pred_arcs.keys()):
+            for t in sorted(['a'] + list(alt_pred_arcs.keys())):
                 attributes += [ t+'H', t+'L' ]
             out_stream.write("#" + '\t'.join(attributes) + '\n')
         for b in range(batch_size):     # sent in batch
@@ -1191,7 +1191,7 @@ mlp_lab_o_size = 400
                 for t in alt_pred_arcs:
                     ppairs[t] = [ [h, self.indices.i2s('label', pred_labels[b,h,d])] for h in range(n) if alt_pred_arcs[t][b,h,d] != 0 ]
 
-                tasks = sorted(ppairs.keys())
+                tasks = sorted(list(ppairs.keys()))
                 # marquage bruit / silence
                 for pair in gpairs:
                     for t in tasks:
