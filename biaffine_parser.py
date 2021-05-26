@@ -13,6 +13,7 @@ from collections import defaultdict
 from modules import *
 from data import *
 from transformers import AutoModel
+from copy import deepcopy
 
 """## The parser"""
 
@@ -1184,22 +1185,26 @@ mlp_lab_o_size = 400
                     break
                 out = [str(d+add), self.indices.i2s('w', forms[b,d])] 
                 # gold head / label pairs for dependent d
-                gpairs = [ (h, self.indices.i2s('label', lab_adja[b,h,d])) for h in range(n) if lab_adja[b,h,d] != 0 ] # PAD_ID or no arc == 0
+                gpairs = [ [h, self.indices.i2s('label', lab_adja[b,h,d])] for h in range(n) if lab_adja[b,h,d] != 0 ] # PAD_ID or no arc == 0
                 # predicted head / label pairs for dependent d, for predicted arcs only
                 ppairs = {}
-                ppairs['a'] = [ (h, self.indices.i2s('label', pred_labels[b,h,d])) for h in range(n) if pred_arcs[b,h,d] != 0 ]
+                ppairs['a'] = [ [h, self.indices.i2s('label', pred_labels[b,h,d])] for h in range(n) if pred_arcs[b,h,d] != 0 ]
                 for t in alt_pred_arcs:
-                    ppairs[t] = [ (h, self.indices.i2s('label', pred_labels[b,h,d])) for h in range(n) if alt_pred_arcs[t][b,h,d] != 0 ]
+                    ppairs[t] = [ [h, self.indices.i2s('label', pred_labels[b,h,d])] for h in range(n) if alt_pred_arcs[t][b,h,d] != 0 ]
 
                 tasks = sorted(list(ppairs.keys()))
                 # marquage bruit / silence
-                for pair in gpairs:
+                orig_gpairs = deepcopy(gpairs)
+                for i, pair in enumerate(gpairs):
+                    p = orig_gpairs[i]
                     for t in tasks:
-                        if pair not in ppairs[t]:
+                        if p not in ppairs[t]:
                             pair[1] = 'SIL'+t+':' + pair[1]
                 for t in tasks:
-                    for pair in ppairs[t]:
-                        if pair not in gpairs:
+                    orig_ppairs = deepcopy(ppairs[t])
+                    for i, pair in enumerate(ppairs[t]):
+                        p = orig_ppairs[i]
+                        if p not in orig_gpairs:
                             pair[1] = 'NOI'+t+':' + pair[1]
 
                 for pairs in [gpairs] + [ ppairs[t] for t in tasks ]:
