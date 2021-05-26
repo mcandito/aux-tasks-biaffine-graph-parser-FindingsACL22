@@ -57,6 +57,7 @@ if __name__ == "__main__":
     argparser.add_argument('-l', '--l_emb_size', help='size of lemma embeddings. Default=100', type=int, default=100)
     argparser.add_argument('-c', '--p_emb_size', help='size of POS embeddings. Default=20', type=int, default=20)
     argparser.add_argument('--lstm_h_size', help='size of lstm embeddings. Default=300', type=int, default=300)
+    argparser.add_argument('--lstm_dropout', help='lstm dropout. Default=0.33', type=float, default=0.33)
     argparser.add_argument('--reduced_bert_size', help='If set to > 0, the bert embeddings will be linearly reduced before concat to non contextual embeddings. Default=0', type=int, default=0)    
     argparser.add_argument('--mlp_arc_o_size', help='size of arc mlp after lstm. Default=300', type=int, default=300)
     argparser.add_argument('--mlp_lab_o_size', help='size of lab mlp after lstm. Default=300', type=int, default=300)
@@ -176,6 +177,7 @@ if __name__ == "__main__":
                                         l_emb_size=args.l_emb_size,
                                         p_emb_size=args.p_emb_size,
                                         lstm_h_size=args.lstm_h_size,
+                                        lstm_dropout=args.lstm_dropout,
                                         mlp_arc_o_size=args.mlp_arc_o_size, 
                                         mlp_lab_o_size=args.mlp_lab_o_size, 
                                         use_pretrained_w_emb=use_pretrained_w_emb, 
