@@ -69,10 +69,13 @@ argparser.add_argument('gold_and_pred_dep_graphs_file', help='Tabulated file wit
 argparser.add_argument('--split_info_file', help='split info file (each line = sentence id, tab, corpus type (train, dev, test)', default=None)
 argparser.add_argument('--data_name', help='short name of data: ftb or sequoia etc... Default=ftb', default='ftb')
 argparser.add_argument('-g', '--graph_mode', action="store_true", help='If set, Graph version of the parser, otherwise Tree version. Default=True', default=True)
+argparser.add_argument('-c', '--prediction_column', type=int, help='column id (starting at 0) for prediction of arcs (and next column should be prediction of labels). Default=4', default=4)
 argparser.add_argument('-p', '--w_emb_file', help='If not "None", pre-trained word embeddings file. NB: first line should contain nbwords embedding size', default='None')
 argparser.add_argument('-t', '--trace', action="store_true", help='print some traces. Default=False', default=False)
 args = argparser.parse_args()
 
+
+pred_col = args.prediction_column
 
 l2dist = { 'g':defaultdict(list), 'p':defaultdict(list) }
 l2direction = { 'g':defaultdict(list), 'p':defaultdict(list) }
@@ -118,7 +121,8 @@ for line in instream.readlines():
     if line.startswith('#'):
         continue
     line = line.strip()
-    line = line.replace('NOI:','').replace('SIL:','') # marques bruit silence eventuellement existantes
+    line = line.replace('NOI:','').replace('NOIa:','').replace('NOIh:','').replace('NOIs:','').replace('NOIb:','').replace('NOIv:','')
+    line = line.replace('SIL:','').replace('SILa:','').replace('SILh:','').replace('SILs:','').replace('SILb:','').replace('SILv:','') # marques bruit silence eventuellement existantes
     if not line: # end of sent
         local = [nb_gold, nb_pred, nb_correct_u, nb_correct_l]
         all_g_p_cu_cl = [ all_g_p_cu_cl[i] + local[i] for i in range(4) ]
@@ -150,9 +154,9 @@ for line in instream.readlines():
             gheads = []
             glabels = []
             
-        if cols[4] != '_':
-            pheads = cols[4].split('|')  # 2|3
-            plabels = cols[5].split('|') # suj|obj
+        if cols[pred_col] != '_':
+            pheads = cols[pred_col].split('|')  # 2|3
+            plabels = cols[pred_col + 1].split('|') # suj|obj
             pbol = dict_like_bag_of_labels(plabels)
         else:
             pheads = []
