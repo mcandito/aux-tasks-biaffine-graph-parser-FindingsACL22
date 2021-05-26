@@ -1227,7 +1227,7 @@ mlp_lab_o_size = 400
                 if 's' in task2preds:
                     nbheads['s'] = nbheads_from_s[b, d].item()
                     out.append('s:%s%d' % ( '' if nbheads['s'] == nbheads['gold'] else 'WRONG_S:' , nbheads['s']))
-                    if nbheads['s'] != len(ppairs['s']):
+                    if (nbheads['s'] != -1) and (nbheads['s'] != len(ppairs['s'])):
                         out[-1] += ':ERROR nbheads_s:'+ str(nbheads['s']) + ' alt_pred_arcs s:' + str(len(ppairs['s']))
 
                 # slabseq
