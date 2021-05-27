@@ -867,6 +867,13 @@ mlp_lab_o_size = 400
                 if epoch == 1:
                     print("saving model after first epoch\n")
                     torch.save(self, out_model_file)
+                # stopping to speed up hyperparameter tuning:
+                # if acc too low at epoch 5, give up
+                elif epoch == 5 and val_task2accs['l'][-1] < 60:
+                    for stream in [sys.stdout, log_stream]:
+                        stream.write("Validation L perf too low at epoch 5, give up training\n\n")
+                    self.log_best_perf(log_stream, 'val', epoch, val_task2accs)
+                        
                 # if validation loss has decreased: save model
                 # nb: when label loss comes into play, it might artificially increase the overall loss
                 #     => we don't early stop at this stage 
@@ -887,8 +894,9 @@ mlp_lab_o_size = 400
                 # NB: the model at last epoch was not saved yet
                 # => we can reload the model from the previous storage
                   else:
-                    #print("Validation loss has increased, reloading previous model, and stop training\n")
-                    print("Validation L* perf has decreased, reloading previous model, and stop training\n")
+                    for stream in [sys.stdout, log_stream]:
+                        #stream.write("Validation loss has increased, reloading previous model, and stop training\n")
+                        stream.write("Validation L* perf has decreased, reloading previous model, and stop training\n")
                     self.log_best_perf(log_stream, 'val', epoch - 1, val_task2accs)
                     # reload (on the appropriate device)
                     # cf. https://pytorch.org/docs/stable/generated/torch.load.html#torch-load
@@ -899,7 +907,8 @@ mlp_lab_o_size = 400
             scheduler.step()
         # if no early stopping
         else:
-            print("Max nb epochs reached\n")
+            for stream in [sys.stdout, log_stream]:
+                stream.write("Max nb epochs reached\n")
             self.log_best_perf(log_stream, 'val', epoch , val_task2accs)
         # end loop on epochs
 
