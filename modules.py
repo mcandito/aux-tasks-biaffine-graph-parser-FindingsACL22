@@ -158,9 +158,8 @@ class L2DistanceLoss_with_mask(nn.Module):
 #print(type(a))
 
 class MLP(nn.Module):
-    """ A single hidden layer MLP with dropout"""
+    """ MLP with single hidden layer, with dropout"""
     def __init__(self, input_size, hidden_size, output_size, activation='ReLU', dropout=0.25):
-        # TODO: handle bias
         super(MLP, self).__init__()
         self.W1 = nn.Linear(input_size, hidden_size)
         self.W2 = nn.Linear(hidden_size, output_size)
@@ -169,7 +168,6 @@ class MLP(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
         
     def forward(self,input):
-        #print("W1", self.W1.weight.shape)
         #print("W2", self.W2.weight.shape)
         a = self.g(self.W1(input))
         #print("after W1 and activation", a.shape)
@@ -179,7 +177,16 @@ class MLP(nn.Module):
         #print("after W2", c.shape)
         return c
         #return self.W2(self.dropout(self.g(self.W1(input))))
-    
+
+class MLP_out_hidden(MLP):
+    """ MLP with single hidden layer, with dropout, outputing both the output and the hidden layer"""
+        
+    def forward(self, input):
+        a = self.g(self.W1(input))
+        b = self.dropout(a)
+        c = self.W2(b)
+        return c, a
+
 class BiAffine(nn.Module):
     """
 Biaffine attention layer (Dozat and Manning, 2017):
