@@ -322,7 +322,7 @@ class DepGraphDataSet(DepDataSet):
         b_lab_adja = np.zeros((bs, m, m), 'int64') # int needed in crossentropyloss
         num_labels = self.indices.get_vocab_size('label')
         # should be integers (int64) but log_cuda not implemented for Long
-        b_bols = np.zeros((bs, m, num_labels), 'int32') #@@ + 1)) # bag of labels, +1 for NOLABEL
+        b_bols = np.zeros((bs, m, num_labels), 'float32') #@@ + 1)) # bag of labels, +1 for NOLABEL
         
         for (b,sent) in enumerate(isentences):
             (forms, lemmas, tags, headss, labelss, slabseqs) = zip(*sent)
