@@ -70,12 +70,14 @@ mlp_lab_o_size = 400
                  mlp_lab_o_size=10, # 600
                  mlp_arc_dropout=0.33, 
                  mlp_lab_dropout=0.33,
+                 aux_hidden_size=25, # same as mlp_arc_o_size, or /2
                  use_bias=False,
                  bert_name=None,   # caution: should match with indices.bert_tokenizer
                  reduced_bert_size=0,
                  freeze_bert=False,
                  mtl_sharing_level=1, # levels of parameter sharing in mtl 1: bert+lstm only, 2: best+lstm+mlp
                  coeff_aux_task_as_input={}, # {'s':5, 'h':20},
+                 coeff_aux_task_stack_propag={}, #{'b':1, 'h':10, 's':2, 'd':1}
     ):
         super(BiAffineParser, self).__init__()
 
@@ -84,7 +86,12 @@ mlp_lab_o_size = 400
         self.use_pretrained_w_emb = use_pretrained_w_emb
         # coefficients to multiply output from aux task to serve as input for a / l tasks
         self.coeff_aux_task_as_input = coeff_aux_task_as_input
-
+        # other way to add output from aux tasks as input for a/l tasks : hidden layers ("stack propagation")
+        for t in list(coeff_aux_task_stack_propag.keys()):
+            if coeff_aux_task_stack_propag[t] == 0:
+                del coeff_aux_task_stack_propag[t]
+        self.coeff_aux_task_stack_propag = coeff_aux_task_stack_propag
+        
         self.bert_name = bert_name
         self.reduced_bert_size = reduced_bert_size
         self.freeze_bert = freeze_bert
@@ -98,8 +105,8 @@ mlp_lab_o_size = 400
         self.task2i = dict( [ [self.tasks[i],i ] for i in range(self.nb_tasks) ] )
         self.mtl_sharing_level = mtl_sharing_level
 
-        if 'l' in self.task2i and 'a' not in self.task2i:
-          exit("ERROR: task a is required for task l")
+        if ('l' in self.task2i or 'scorearcnbh' in self.task2i or 'scorearcnbd' in self.task2i) and 'a' not in self.task2i:
+          exit("ERROR: task a is required for task l or scorearcnbh or scorearcnbd")
 
         if 'g' in self.task2i and not('d' in self.task2i and 'h' in self.task2i):
           exit("ERROR: tasks d and h are required for task g")
@@ -127,6 +134,7 @@ mlp_lab_o_size = 400
         self.mlp_lab_dropout = mlp_lab_dropout
         self.lstm_num_layers = lstm_num_layers
         self.lstm_dropout = lstm_dropout
+        self.aux_hidden_size = aux_hidden_size
 
         self.use_bias = use_bias # whether to add bias in all biaffine transformations
     
@@ -206,26 +214,44 @@ mlp_lab_o_size = 400
         self.lab_d_mlp = MLP(s, l, l, dropout=mlp_lab_dropout).to(device)  
         self.lab_h_mlp = MLP(s, l, l, dropout=mlp_lab_dropout).to(device)
 
+
+        # ------ stack propagation of aux tasks hidden representations ----
+        self.aux_in_arc_h = 0
+        self.aux_in_arc_d = 0
+        self.aux_in_lab_h = 0
+        self.aux_in_lab_d = 0
+        if self.coeff_aux_task_stack_propag:
+          # to add to lab_d representations
+          if 's' or 'b' in self.coeff_aux_task_stack_propag:
+            self.aux_in_lab_d += self.aux_hidden_size
+          # for arc_d
+          if 'h' in self.coeff_aux_task_stack_propag:
+            self.aux_in_arc_d += self.aux_hidden_size
+          # for arc_h
+          if 'd' in self.coeff_aux_task_stack_propag:
+            self.aux_in_arc_h += self.aux_hidden_size
+
         # ------ output of auxiliary tasks included as input for dependents -------
-        self.aux_insize = 0
-        self.aux_outsize = 0
-        if self.coeff_aux_task_as_input:
+        elif self.coeff_aux_task_as_input:
+          aux_insize = 0
           if 's' in self.coeff_aux_task_as_input:             
-            self.aux_insize += 10
+            aux_insize += 10
             self.s_embs = nn.Embedding(self.indices.get_vocab_size('slabseq'), 10).to(self.device)
           if 'h' in self.coeff_aux_task_as_input:
-            self.aux_insize += 1
-          self.aux_outsize = round(mlp_arc_o_size / 8) # part that will be concatenated to arc_d (representation of dependents)
-          self.aux_task_as_input_linear_layer = nn.Linear(self.aux_insize, self.aux_outsize).to(self.device)
-          print("aux linear layer:", self.aux_insize, self.aux_outsize)
-        
-
-        # ---- BiAffine scores for arcs and labels --------
-        # biaffine matrix size is num_label x d x d, with d the output size of the MLPs
+            aux_insize += 1
+          if 'b' in self.coeff_aux_task_as_input:
+            aux_insize += hidden
+          self.aux_in_arc_d = round(mlp_arc_o_size / 4) # part that will be concatenated to arc_d (representation of dependents)
+          self.aux_in_lab_d = self.aux_in_arc_d
+          self.aux_task_as_input_linear_layer = nn.Linear(aux_insize, self.aux_in_arc_d).to(self.device)
+          print("aux linear layer:", aux_insize, self.aux_in_arc_d)
+            
+        # ---- Biaffine scores for arcs and labels --------
+        # biaffine matrices size depend on the aux_in_arc/lab_d/h values
         if 'a' in self.task2i:
-          self.biaffine_arc = BiAffine(device, a, a + self.aux_outsize, use_bias=self.use_bias)
+          self.biaffine_arc = BiAffine(device, a+self.aux_in_arc_h, a+self.aux_in_arc_d, use_bias=self.use_bias)
           if 'l' in self.task2i:
-            self.biaffine_lab = BiAffine(device, l, l + self.aux_outsize, num_scores_per_arc=self.num_labels, use_bias=self.use_bias)
+            self.biaffine_lab = BiAffine(device, l+self.aux_in_lab_h, l+self.aux_in_lab_d, num_scores_per_arc=self.num_labels, use_bias=self.use_bias)
 
         # ----- final layers for the sub tasks ------------
 
@@ -239,23 +265,21 @@ mlp_lab_o_size = 400
         # final layer to get a single real value for nb heads / nb deps
         # (more precisely : will be interpreted as log(1+nbheads))
         if 'h' in self.task2i:
-          #self.final_layer_nbheads = nn.Linear(a, 1).to(self.device)
-          self.final_layer_nbheads = MLP(d, a, 1).to(self.device)
+          self.final_layer_nbheads = MLP_out_hidden(d, aux_hidden_size, 1).to(self.device)
 
         if 'd' in self.task2i:
-          #self.final_layer_nbdeps = nn.Linear(a, 1).to(self.device)
-          self.final_layer_nbdeps = MLP(d, a, 1).to(self.device)
+          self.final_layer_nbdeps = MLP_out_hidden(d, aux_hidden_size, 1).to(self.device)
 
         # final layer to get a bag of labels vector, of size num_labels + 1 (for an additional "NOLABEL" label) useless in the end
         #@@self.final_layer_bag_of_labels = nn.Linear(a,self.num_labels + 1).to(self.device)
         if 'b' in self.task2i:
           #self.final_layer_bag_of_labels = nn.Linear(a, self.num_labels).to(self.device)
-          self.final_layer_bag_of_labels = MLP(d, a, self.num_labels).to(self.device)
+          self.final_layer_bag_of_labels = MLP_out_hidden(d, aux_hidden_size, self.num_labels).to(self.device)
 
         # final layer to get a "sorted label sequence", seen as an atomic symbol
         if 's' in self.task2i:
           #self.final_layer_slabseqs = nn.Linear(a, self.indices.get_vocab_size('slabseq')).to(self.device)
-          self.final_layer_slabseqs = MLP(d, a, self.indices.get_vocab_size('slabseq')).to(self.device)
+          self.final_layer_slabseqs = MLP_out_hidden(d, aux_hidden_size, self.indices.get_vocab_size('slabseq')).to(self.device)
 
         #for name, param in self.named_parameters():
         #  if name.startswith("final"):
@@ -320,7 +344,7 @@ mlp_lab_o_size = 400
         lab_h = self.lab_h_mlp(lstm_hidden_seq) # [b, max_seq_len, mlp_lab_o_size]
         lab_d = self.lab_d_mlp(lstm_hidden_seq)
 
-        S_arc = S_lab = log_nbheads = log_nbdeps = bols = S_slabseqs = None
+        S_arc = S_lab = log_nbheads = log_nbdeps = log_bols = S_slabseqs = None
 
         # ------------- auxiliary tasks ------------------
         # decide the input for the mlps of auxiliary tasks, depending on the sharing level
@@ -333,36 +357,87 @@ mlp_lab_o_size = 400
           
         # nb heads / nb deps (actually output will be interpreted as log(1+nb))
         if 'h' in self.task2i:
-          log_nbheads = self.final_layer_nbheads(input_d).squeeze(2) # [b, max_seq_len]
+          log_nbheads, hidden_h = self.final_layer_nbheads(input_d)
+          log_nbheads = log_nbheads.squeeze(2) # [b, max_seq_len]
 
         if 'd' in self.task2i:
-          log_nbdeps = self.final_layer_nbdeps(input_h).squeeze(2)   # [b, max_seq_len]
+          log_nbdeps, hidden_d = self.final_layer_nbdeps(input_h)
+          log_nbdeps = log_nbdeps.squeeze(2)   # [b, max_seq_len]
 
         # bag of labels
         if 'b' in self.task2i:
-          bols = self.final_layer_bag_of_labels(input_d) # [b, max_seq_len, num_labels + 1] (+1 for NOLABEL)
+          log_bols, hidden_b = self.final_layer_bag_of_labels(input_d) # [b, max_seq_len, num_labels + 1] (+1 for NOLABEL)
 
         # sorted lab sequences (equivalent to bag of labels, but seen as a symbol for the whole BOL)
         if 's' in self.task2i:
-          S_slabseqs = self.final_layer_slabseqs(input_d)
+          S_slabseqs, hidden_s = self.final_layer_slabseqs(input_d)
 
         # Biaffine scores for arcs
         if 'a' in self.task2i:
-          # if use output of aux tasks s and binh as input rep for dependents
-          # => modify arc_d
-          if self.coeff_aux_task_as_input:
+          # if use output of aux tasks as input repres for deps / heads
+          if self.coeff_aux_task_stack_propag:
+            coeffs = self.coeff_aux_task_stack_propag
+            # modify lab_d
+            if 'b' in coeffs or 's' in coeffs:           
+              if 's' in coeffs:
+                if 'b' in coeffs:
+                  aux = (coeffs['s'] * hidden_s) + (coeffs['b'] * hidden_b)
+                else:
+                  aux = coeffs['s'] * hidden_s
+              else:
+                aux = coeffs['b'] * hidden_b
+              lab_d = torch.cat((lab_d, aux), dim=-1)
+            # modify arc_d
+            if 'h' in coeffs:
+              arc_d = torch.cat((arc_d, coeffs['h'] * hidden_h), dim=-1)  
+            # modify arc_h
+            if 'd' in coeffs:
+              arc_h = torch.cat((arc_h, coeffs['d'] * hidden_d), dim=-1)  
+
+          # other way to propagate aux task predictions
+          elif self.coeff_aux_task_as_input:
+            b = s = h = None
+            if 'b' in self.coeff_aux_task_as_input:
+              # get the "embedding" of each label
+              # shape [num_labels, self.aux_hidden_size] => each line is an "embedding" of a label
+              w = self.final_layer_bag_of_labels.W2.weight
+              # compute a weighted sum of label embeddings 
+              # (== a continuous bag of labels (cbol))
+              # in training mode: use as weights the gold bols
+              if False: #@@  seems quite detrimental to use gold bols at training time #mode == 'train':
+                pred_or_gold_bols = bols
+              else:
+                pred_or_gold_bols = torch.exp(log_bols) - 1 # [b, d, num_labels]
+                # no need to get integer values for pred_bols => continuous weights
+              # broadcasting b, d, num_labels, 1
+              #            *       num_labels, label_emb_size
+              # and summing over labels
+              cbol = torch.sum(pred_or_gold_bols.unsqueeze(3) * w, dim=2) # b, d, aux_hidden_size
+              b = self.coeff_aux_task_as_input['b'] * cbol
             if 's' in self.coeff_aux_task_as_input:
               # predict the slabseqs
               pred_slabseqs = torch.argmax(S_slabseqs, dim=2) # [b, d]              
               # convert them to embeddings
-              aux_input = self.coeff_aux_task_as_input['s'] * self.s_embs(pred_slabseqs)
-              if 'h' in self.coeff_aux_task_as_input:
-                # take the scores of each of the bin nb of heads (0, 1, or more than 1 (=2))
-                ##pred_binnbheads = torch.clamp(torch.round(torch.exp(log_binnbheads) - 1), 0, 2)
-                c = self.coeff_aux_task_as_input['h']
-                aux_input = torch.cat((aux_input, c * log_nbheads.unsqueeze(2)), dim=-1)
-            elif 'h' in self.coeff_aux_task_as_input:
-              aux_input = self.coeff_aux_task_as_input['h'] * log_nbheads.unsqueeze(2)
+              s = self.coeff_aux_task_as_input['s'] * self.s_embs(pred_slabseqs)
+
+                aux_input = torch.cat((aux_input, a), dim=-1)
+            if 'h' in self.coeff_aux_task_as_input:
+              # take the scores of each of the bin nb of heads (0, 1, or more than 1 (=2))
+              ##pred_binnbheads = torch.clamp(torch.round(torch.exp(log_binnbheads) - 1), 0, 2)
+              h = self.coeff_aux_task_as_input['h'] * log_nbheads.unsqueeze(2)
+            if b:
+              aux_input = b
+              if h:
+                aux_input = torch.cat((aux_input, h), dim=-1)
+              if s:
+                aux_input = torch.cat((aux_input, s), dim=-1)
+            elif h:
+              aux_input = h
+              if s:
+                aux_input = torch.cat((aux_input, s), dim=-1)
+            elif s:
+              aux_input = s
+
             #print("AUX INPUT", aux_input.shape)
             aux_hidden = self.aux_task_as_input_linear_layer(aux_input)
             arc_d = torch.cat((arc_d, aux_hidden), dim=-1)
@@ -377,7 +452,7 @@ mlp_lab_o_size = 400
           S_lab = self.biaffine_lab(lab_h, lab_d) # S(k, l, i, j) = score of sample k, label l, head word i, dep word j
         
 
-        return S_arc, S_lab, log_nbheads, log_nbdeps, bols, S_slabseqs
+        return S_arc, S_lab, log_nbheads, log_nbdeps, log_bols, S_slabseqs
     
     def batch_forward_and_loss(self, batch, trace_first=False, make_alt_preds=False):
         """
@@ -444,6 +519,35 @@ mlp_lab_o_size = 400
         else:
           gold_nbheads = None
 
+        # get the predicted nbheads as sum over all h of sigmoid(score of arc in S_arc)
+        # and compute squared loss
+        if 'scorearcnbh' in self.task2i:
+          # might be already computed for task h
+          if gold_nbheads == None:
+            gold_nbheads = arc_adja.sum(dim=1).float() # [b, h, d] => [b, d]
+          # (will serve as gold nb heads computed over non-arcs : 0 for every dep)
+          zeros = torch.zeros(forms.shape).to(self.device) # [b, d] 
+
+          # predicted nb head according the S_arc scores:
+          S_arc_sigmoid = torch.sigmoid(S_arc) 
+          # over gold heads
+          S_arc_sigmoid_gold_arcs = S_arc_sigmoid * arc_adja # clamp to 0 the non-gold arcs
+          pred_scorearcnbh_arcs = S_arc_sigmoid_gold_arcs.sum(dim=1)
+          # over non gold heads
+          S_arc_sigmoid_nongold_arcs = S_arc_sigmoid * (1 - arc_adja) # clamp to 0 the gold arcs          
+          pred_scorearcnbh_nonarcs = S_arc_sigmoid_nongold_arcs.sum(dim=1)
+          
+          # for each dep, the predicted total nbheads for the gold heads should equal the gold nbheads
+          ltemp = self.mse_loss_with_mask(pred_scorearcnbh_arcs, gold_nbheads, linear_pad_mask)
+          # for each dep, the predicted total nbheads for the non gold heads should equal 0
+          loss_scorearcnbh = self.scorearcnb_coeff * (ltemp + self.mse_loss_with_mask(pred_scorearcnbh_nonarcs, zeros, linear_pad_mask))
+
+          task2loss['scorearcnbh'] = loss_scorearcnbh.item()
+          ti = self.task2i['scorearcnbh']
+          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbh) + self.log_sigma2[ti]
+        else:
+          S_arc_sigmoid_gold_arcs = None
+
         if 'd' in self.task2i:
           gold_nbdeps = arc_adja.sum(dim=2).float()  # [b, h, d] => [b, h]
           log_gold_nbdeps = torch.log(1 + gold_nbdeps)
@@ -454,6 +558,31 @@ mlp_lab_o_size = 400
         else:
           gold_nbdeps = None
 
+        # get the predicted nbdeps as sum over all h of sigmoid(score of arc in S_arc)
+        if 'scorearcnbd' in self.task2i:
+          # might be already computed for task d
+          if gold_nbdeps == None:
+            gold_nbdeps = arc_adja.sum(dim=2).float() # [b, h, d] => [b, h]
+          # predicted nb dep according the S_arc scores:
+          # take sigmoid of S_arc
+          if S_arc_sigmoid_gold_arcs == None:
+            S_arc_sigmoid = torch.sigmoid(S_arc) 
+            S_arc_sigmoid_gold_arcs = S_arc_sigmoid * arc_adja 
+            S_arc_sigmoid_nongold_arcs = S_arc_sigmoid * (1 - arc_adja) # clamp to 0 the gold arcs
+            zeros = torch.zeros(forms.shape).to(self.device) # [b, d] (will serve as gold nb deps computed over non-arcs : 0 for every dep)
+          
+          pred_scorearcnbd_arcs = S_arc_sigmoid_gold_arcs.sum(dim=2)
+          pred_scorearcnbd_nonarcs = S_arc_sigmoid_nongold_arcs.sum(dim=2)
+
+          # for each dep, the predicted total nbheads for the gold heads should equal the gold nbheads
+          ltemp = self.mse_loss_with_mask(pred_scorearcnbd_arcs, gold_nbdeps, linear_pad_mask)
+          # for each dep, the predicted total nbheads for the non gold heads should equal 0
+          loss_scorearcnbd = self.scorearcnb_coeff * (ltemp + self.mse_loss_with_mask(pred_scorearcnbd_nonarcs, zeros, linear_pad_mask))
+            
+          task2loss['scorearcnbd'] = loss_scorearcnbd.item()
+          ti = self.task2i['scorearcnbd']
+          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbd) + self.log_sigma2[ti]
+          
 #        # predicted global balance in each sentence, between the predicted nbheads and the predicted nbdeps
 #        # which should be 0
 #        if 'g' in self.task2i:
@@ -808,7 +937,7 @@ mlp_lab_o_size = 400
                   if k in ['a','l']: 
                     for i in [0,1,2]:
                       train_task2nbcorrect[k][i] += task2nbcorrect[k][i]
-                  elif k != 'g':
+                  elif k not in ['g', 'scorearcnbd', 'scorearcnbh']:
                     train_task2nbcorrect[k] += task2nbcorrect[k]
 
             # for one epoch              
@@ -819,7 +948,7 @@ mlp_lab_o_size = 400
               train_task2loss[k] /= train_data.nb_words
               if k in ['a', 'l']:
                 train_task2accs[k].append(fscore(*train_task2nbcorrect[k]))
-              elif k != 'g':
+              elif k not in ['g', 'scorearcnbd', 'scorearcnbh']:
                 train_task2accs[k].append( 100 * train_task2nbcorrect[k] / train_nb_toks )            
             train_loss = train_loss/train_data.nb_words
             train_losses.append(train_loss)
@@ -835,29 +964,31 @@ mlp_lab_o_size = 400
                         loss, task2loss, task2nbcorrect, nb_toks = self.batch_forward_and_loss(batch, trace_first=trace_first, make_alt_preds=True)
                         val_loss += loss.item()
                         val_nb_toks += nb_toks
-                        for k in task2nbcorrect.keys():
-                          if k in task2loss:
-                            val_task2loss[k] += task2loss[k]
+                        for k in task2nbcorrect:
                           if type(task2nbcorrect[k]) != int: # tuple or list 
                             if k not in val_task2nbcorrect: # those that are not registered yet are the make_alt_preds, and are only fscore-like
                               val_task2nbcorrect[k] = [0,0,0]
                             for i in [0,1,2]:
                               val_task2nbcorrect[k][i] += task2nbcorrect[k][i]
-                          elif k != 'g':
+                          elif k not in ['g', 'scorearcnbd', 'scorearcnbh']:
                             val_task2nbcorrect[k] += task2nbcorrect[k]
+                        for k in task2loss:
+                          val_task2loss[k] += task2loss[k]
+
                         trace_first = False
                         
                     # for one epoch
                     print("Val: nb toks " + str(val_nb_toks) + "/ " + " / ".join([t.upper()+":"+str(val_task2nbcorrect[t]) for t in self.tasks]))              
                     assert val_nb_toks == val_data.nb_words, "val_nb_toks %d should equal val_data.nb_words %d" %(val_nb_toks, val_data.nb_words)
-                    for k in task2nbcorrect.keys():#self.tasks:
-                      if k in val_task2loss:
-                        val_task2loss[k] /= val_data.nb_words
+                    for t in val_task2nbcorrect:#self.tasks:
                       # if task if fscore-like
-                      if type(val_task2nbcorrect[k]) == list:
-                        val_task2accs[k].append(fscore(*val_task2nbcorrect[k]))
-                      elif k != 'g':
-                        val_task2accs[k].append( 100 * val_task2nbcorrect[k] / val_nb_toks )            
+                      if type(val_task2nbcorrect[t]) == list:
+                        val_task2accs[t].append(fscore(*val_task2nbcorrect[t]))
+                      elif t not in ['g', 'scorearcnbd', 'scorearcnbh']:
+                        val_task2accs[t].append( 100 * val_task2nbcorrect[t] / val_nb_toks )
+                    for t in val_task2loss:
+                      val_task2loss[t] /= val_data.nb_words
+                    
 
                     val_loss = val_loss/val_data.nb_words
                     val_losses.append(val_loss)
@@ -955,13 +1086,13 @@ mlp_lab_o_size = 400
             self.log_values_suff = 'graph\t'
         else:
             self.log_values_suff = 'tree\t'
-        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level']
+        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level']
 
         featvals = [ str(self.__dict__[f]) for f in featnames ]
 
         t = '.'.join(sorted(self.tasks))
-        featvals = [t, str(self.coeff_aux_task_as_input)] + featvals
-        featnames = ['tasks', 'coeff_aux_task_as_input'] + featnames
+        featvals = [t, str(self.coeff_aux_task_as_input), str(self.coeff_aux_task_stack_propag)] + featvals
+        featnames = ['tasks', 'coeff_aux_task_as_input', 'coeff_aux_task_stack_propag'] + featnames
 
         config_str = '_'.join(featvals) # get a compact name for the hyperparameter config
         featvals = [config_str] + featvals
@@ -972,7 +1103,7 @@ mlp_lab_o_size = 400
 
 
     def log_train_hyper(self, outstream):
-        for h in ['w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'mlp_lab_o_size', 'mlp_lab_dropout', 'mtl_sharing_level']:
+        for h in ['w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'mlp_lab_o_size', 'mlp_lab_dropout', 'aux_hidden_size', 'mtl_sharing_level', 'coeff_aux_task_as_input', 'coeff_aux_task_stack_propag']:
           outstream.write("# %s : %s\n" %(h, str(self.__dict__[h])))
         outstream.write("\n")
         for h in ['graph_mode', 'batch_size', 'beta1','beta2','lr','lex_dropout', 'freeze_bert']:
@@ -1033,7 +1164,7 @@ mlp_lab_o_size = 400
             if k in ['a','l']: 
               for i in [0,1,2]:
                 test_task2nbcorrect[k][i] += task2nbcorrect[k][i]
-            elif k != 'g':
+            elif k not in ['g', 'scorearcnbd', 'scorearcnbh']:
               test_task2nbcorrect[k] += task2nbcorrect[k]
 
           # TODO : update the tree mode
@@ -1073,7 +1204,7 @@ mlp_lab_o_size = 400
         for k in self.tasks:
           if k in ['a', 'l']:
             test_task2acc[k] = fscore(*test_task2nbcorrect[k])
-          elif k != 'g':
+          elif k not in ['g', 'scorearcnbd', 'scorearcnbh']:
             test_task2acc[k] = 100 * test_task2nbcorrect[k] / test_nb_toks
 
 
