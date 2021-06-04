@@ -318,10 +318,10 @@ class DepGraphDataSet(DepDataSet):
         #     - unexistent arc in gold graph 
         #     - OR padded cell (padded dep or head)
         bs = len(isentences)
-        b_arc_adja = np.zeros((bs, m, m))          # float needed in BCELoss
+        b_arc_adja = np.zeros((bs, m, m), 'float32') # float needed in BCELoss #NB: default is float64
         b_lab_adja = np.zeros((bs, m, m), 'int64') # int needed in crossentropyloss
         num_labels = self.indices.get_vocab_size('label')
-        b_bols = np.zeros((bs, m, num_labels)) #@@ + 1)) # bag of labels, +1 for NOLABEL
+        b_bols = np.zeros((bs, m, num_labels), 'int64') #@@ + 1)) # bag of labels, +1 for NOLABEL
         
         for (b,sent) in enumerate(isentences):
             (forms, lemmas, tags, headss, labelss, slabseqs) = zip(*sent)
