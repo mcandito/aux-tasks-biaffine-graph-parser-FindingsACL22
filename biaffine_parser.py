@@ -439,14 +439,12 @@ mlp_lab_o_size = 400
             #print("AUX INPUT", aux_input.shape)
             aux_hidden = self.aux_task_as_input_linear_layer(aux_input)
             arc_d = torch.cat((arc_d, aux_hidden), dim=-1)
+            lab_d = torch.cat((lab_d, aux_hidden), dim=-1)
             
           S_arc = self.biaffine_arc(arc_h, arc_d) # S(k, i, j) = score of sample k, head word i, dep word j
 
         # Biaffine scores for labeled arcs
         if 'l' in self.task2i:
-          if self.aux_outsize:
-            # aux_hidden already computed in task 'a'
-            lab_d = torch.cat((lab_d, aux_hidden), dim=-1)
           S_lab = self.biaffine_lab(lab_h, lab_d) # S(k, l, i, j) = score of sample k, label l, head word i, dep word j
         
 
