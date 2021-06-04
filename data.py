@@ -17,7 +17,99 @@ PAD_ID = 0
 UNK_ID = 1
 DROP_ID = 2
 PAD_HEAD_RK = -1 # for tree mode only: id for head of padded dep token
- 
+
+
+def load_dep_graphs_sdp_format(gold_sdp_file, corpus_type='train', split_info={'test':[21], 'dev':[20]}):
+    """
+        Inputs: - conll(u) file with dependency graphs
+                    (columns HEAD and GOV are pipe-separated values)
+
+                - either provide one of the following:
+                    - corpus_type : smthing like 'train', 'dev' etc...
+                    - split_info: dictionary for sections to consider for each type (test, dev) ...
+
+
+        Returns 3 dictionaries (whose keys are corpus types (train/dev/test/val))
+        - sentences dictionary
+          - key = corpus type
+          - value = list of sentences, 
+                    each sentence is a list of 5-tuples :
+                    [form, lemma, tag, list of govs, list of labels]                                
+    """
+    sentences = {corpus_type:[]}
+    max_sent_len = {corpus_type:0}
+    section2part = {}
+    if split_info:
+        for part in split_info:
+            sentences[part] = []
+            for section in split_info[part]:
+                section2part[int(section)] = part
+            max_sent_len[part] = 0
+
+
+    stream = open(gold_sdp_file)
+    sent = [[ROOT_FORM, ROOT_LEMM, ROOT_TAG, [], [], '']]
+    predrks2lidxs = [0] # the dummy root is the first "pred" (gov of top nodes)
+    sent_rk = 0
+    for line in stream.readlines():
+        line = line.strip()
+        if line.startswith('#'):
+            if line.startswith('#2'):
+                section = int(line[2:4])
+                sentid = line[2:]
+            continue
+        if not line:
+            if section in section2part:
+                part = section2part[section]
+            else:
+                part = corpus_type
+            # replace predrks by pred linear indices
+            for tok in sent:
+                for i,gov_predrk in enumerate(tok[3]):
+                    tok[3][i] = predrks2lidxs[gov_predrk]
+            sentences[part].append(sent)
+            l = len(sent)
+            if max_sent_len[part] < l: 
+                max_sent_len[part] = l 
+
+            sent = [[ROOT_FORM, ROOT_LEMM, ROOT_TAG, [], [], '']]
+            predrks2lidxs = [0] # the dummy root is the first "pred" (gov of top nodes)
+        else:
+            cols = line.split('\t')
+            # skip conllu multi-word tokens
+            if '-' in cols[0]:
+                continue
+            lidx = int(cols[0])
+            form  = cols[1]
+            lemma = cols[2]
+            tag   = cols[3]
+            top = cols[4]
+            pred = cols[5]
+            frame = cols[6]
+
+            if pred == '+':
+                predrks2lidxs += lidx
+            govs = []
+            labels = []
+            if top == '+':
+              govs.append(0) # connect top nodes to the dummy root
+              labels.append('*TOP*')
+            if pred == '+':
+                predrks2lidxs.append(lidx)
+            
+            for i in range(7, len(cols), 1):
+                if cols[i] != '_':
+                    predrk = i - 7 + 1
+                    govs.append(predrk) # for now store pred rk, will be replaced by pred linear indices
+                    labels.append(cols[i])
+
+            slabseq = '|'.join(sorted(labels))
+            sent.append([form, lemma, tag, govs, labels, slabseq])
+
+    print("Max sentence length:", max_sent_len)
+    
+    return sentences
+
 
 def load_dep_trees(gold_conll_file, corpus_type='all', split_info_file=None, val_proportion=None):
     """
