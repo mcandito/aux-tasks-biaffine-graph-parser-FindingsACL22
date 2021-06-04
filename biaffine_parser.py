@@ -419,8 +419,6 @@ mlp_lab_o_size = 400
               pred_slabseqs = torch.argmax(S_slabseqs, dim=2) # [b, d]              
               # convert them to embeddings
               s = self.coeff_aux_task_as_input['s'] * self.s_embs(pred_slabseqs)
-
-                aux_input = torch.cat((aux_input, a), dim=-1)
             if 'h' in self.coeff_aux_task_as_input:
               # take the scores of each of the bin nb of heads (0, 1, or more than 1 (=2))
               ##pred_binnbheads = torch.clamp(torch.round(torch.exp(log_binnbheads) - 1), 0, 2)
