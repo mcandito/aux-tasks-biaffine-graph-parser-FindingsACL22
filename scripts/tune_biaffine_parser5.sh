@@ -25,11 +25,11 @@ META_LOG=$PROJH/../OUTPUT/meta_log
 rm $META_LOG
 touch $META_LOG
 
-DEVICE_ID=1
+DEVICE_ID=2
 
 W_EMB_SIZE=100
-L_EMB_SIZE=100
-P_EMB_SIZE=50
+L_EMB_SIZE=0
+P_EMB_SIZE=0
 
 NB_EPOCHS=30 #
 
@@ -49,16 +49,17 @@ for FREEZE_BERT in ''; #'-f '
 do for LR in 0.00002 0.00001;
    do for MLP_ARC_O_SIZE in 400;# 300; # used for ARC and LAB # 600 is too big
       do for P_EMB_SIZE in 0;# 50;# with or without POS
-			   #do for EMB_FILE in None $D/vecs100-linear-frwiki; # with or without embeddings
-	 do for TASKS in a.l.h a.l.h.s a.l
-	    do for i in 1 2 3; # 3 runs with same config
-	       do
-		   timestamp=$(date "+%Y-%m-%d-%H-%M-%S");
-		   O=$PROJH/../OUTPUT/output-$timestamp;
-		   mkdir $O;
-		   echo $O >> $META_LOG ;
-		   echo python $PROJH/train_or_use_parser.py train $TRAIN_FILE $O -g --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -n $NB_EPOCHS --device_id $DEVICE_ID --bert_name $BERT_NAME $FREEZE_BERT >> $META_LOG ;
-		   python $PROJH/train_or_use_parser.py train $TRAIN_FILE $O -g --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -n $NB_EPOCHS --device_id $DEVICE_ID --bert_name $BERT_NAME $FREEZE_BERT >> $META_LOG ;
+	 do for EMB_FILE in None ; #$D/vecs100-linear-frwiki; # with or without embeddings
+	    do for TASKS in a.l.h a.l.h.s a.l;
+	       do for i in 1 2 3; # 3 runs with same config
+		  do
+		      timestamp=$(date "+%Y-%m-%d-%H-%M-%S");
+		      O=$PROJH/../OUTPUT/output-$timestamp;
+		      mkdir $O;
+		      echo $O >> $META_LOG ;
+		      echo python $PROJH/train_or_use_parser.py train $TRAIN_FILE $O -g --tasks $TASKS --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -n $NB_EPOCHS --device_id $DEVICE_ID --bert_name $BERT_NAME $FREEZE_BERT >> $META_LOG ;
+		      python $PROJH/train_or_use_parser.py train $TRAIN_FILE $O -g --tasks $TASKS --data_name $DATA_NAME -v $DEV_FILE -p $EMB_FILE -w $W_EMB_SIZE -l $L_EMB_SIZE -c $P_EMB_SIZE --lstm_h_size $LSTM_H_SIZE --mlp_arc_o_size $MLP_ARC_O_SIZE --mlp_lab_o_size $MLP_ARC_O_SIZE -b $BATCH_SIZE -r $LR -d $LEX_DROPOUT -n $NB_EPOCHS --device_id $DEVICE_ID --bert_name $BERT_NAME $FREEZE_BERT ;
+		  done
 	       done
 	    done
 	 done
