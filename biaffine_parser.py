@@ -214,6 +214,13 @@ mlp_lab_o_size = 400
         self.lab_d_mlp = MLP(s, l, l, dropout=mlp_lab_dropout).to(device)  
         self.lab_h_mlp = MLP(s, l, l, dropout=mlp_lab_dropout).to(device)
 
+        # ------ double arc prediction (dpa) ------------------------------
+        if 'dpa' in self.task2i:
+          self.dpa_arc_d_mlp = MLP(s, a, a, dropout=mlp_arc_dropout).to(device)
+          self.dpa_arc_h_mlp = MLP(s, a, a, dropout=mlp_arc_dropout).to(device)  
+          self.dpa_previoush_linear_layer = nn.Linear(a, int(a/2)).to(self.device)
+          self.dpa_biaffine_arc = BiAffine(device, a, a + int(a/2), use_bias=self.use_bias)
+        
 
         # ------ stack propagation of aux tasks hidden representations ----
         self.aux_in_arc_h = 0
@@ -448,7 +455,26 @@ mlp_lab_o_size = 400
           S_lab = self.biaffine_lab(lab_h, lab_d) # S(k, l, i, j) = score of sample k, label l, head word i, dep word j
         
 
-        return S_arc, S_lab, log_nbheads, log_nbdeps, log_bols, S_slabseqs
+        if 'dpa' in self.task2i:
+          # for each d(ep), sum the arc_h representations of the predicted heads of d
+          pred_arcs = (S_arc > 0).int() * b_pad_masks  # b, h, d
+          # pred_arcs.unsqueeze(3)                     # => b, h, d, 1
+          # arc_h.unsqueeze(2)                         # => b, h, 1, mlp_arc_o_size
+          x = pred_arcs.unsqueeze(3) * arc_h.unsqueeze(2) # b, h, d, mlp_arc_o_size
+          x = torch.sum(x,dim=1)                          # b, h, d, mlp_arc_o_size => b, d, mlp_arc_o_size
+
+          # pass into a linear layer to reduce dim
+          x = self.dpa_previoush_linear_layer(x)  # b, d, mlp_arc_o_size/2
+
+          # specific MLPs for the second arc prediction
+          dpa_arc_h = self.dpa_arc_h_mlp(lstm_hidden_seq) # [b, h=max_seq_len, mlp_arc_o_size]
+          dpa_arc_d = self.dpa_arc_d_mlp(lstm_hidden_seq) # [b, d=max_seq_len, mlp_arc_o_size]
+          dpa_arc_d = torch.cat((dpa_arc_d, x), dim=2)
+          S_dpa_arc = self.dpa_biaffine_arc(dpa_arc_h, dpa_arc_d)
+        else:
+          S_dpa_arc = None
+          
+        return S_arc, S_lab, S_dpa_arc, log_nbheads, log_nbdeps, log_bols, S_slabseqs
     
     def batch_forward_and_loss(self, batch, trace_first=False, make_alt_preds=False):
         """
@@ -464,7 +490,7 @@ mlp_lab_o_size = 400
         lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols, slabseqs = batch
             
         # forward 
-        S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs = self(forms, lemmas, tags, bert_tokens, bert_ftid_rkss, pad_masks, lengths=lengths)
+        S_arc, S_lab, S_dpa_arc, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs = self(forms, lemmas, tags, bert_tokens, bert_ftid_rkss, pad_masks, lengths=lengths)
 
         # pad_masks is [b, m, m]
         # => build a simple [b, m] mask
@@ -503,6 +529,11 @@ mlp_lab_o_size = 400
           task2loss['l'] = lab_loss.item()
           loss +=  (dyn_loss_weights[ti] * lab_loss) + self.log_sigma2[ti]
         
+        if 'dpa' in self.task2i:
+          dpa_arc_loss = self.bce_loss_with_mask(S_dpa_arc, arc_adja, pad_masks)
+          ti = self.task2i['dpa']
+          task2loss['dpa'] = dpa_arc_loss.item()
+          loss +=  (dyn_loss_weights[ti] * dpa_arc_loss) + self.log_sigma2[ti]
             
         # auxiliary tasks
         if 'h' in self.task2i:
@@ -619,7 +650,7 @@ mlp_lab_o_size = 400
         # --- Prediction and evaluation --------------------------
         # provide the batch, and all the output of the forward pass
         task2nbcorrect, _, _, _, _ = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask, 
-                                                                     S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs,
+                                                                     S_arc, S_lab, S_dpa_arc, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs,
                                                                      make_alt_preds)
  
         return loss, task2loss, task2nbcorrect, nb_toks
@@ -693,7 +724,7 @@ mlp_lab_o_size = 400
     
     def batch_predict_and_evaluate(self, batch, 
                                    gold_nbheads, gold_nbdeps, linear_pad_mask, # computed in batch_forward_and_loss
-                                   S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs, # output by forward pass
+                                   S_arc, S_lab, S_dpa_arc, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs, # output by forward pass
                                    make_alt_preds=False # whether to study other prediction algorithms
                                    ):
 
@@ -704,12 +735,11 @@ mlp_lab_o_size = 400
 
       # --- Prediction and evaluation --------------------------
       with torch.no_grad():
-        if 'a' in self.task2i:
-          pred_arcs = (S_arc > 0).int() * pad_masks  # b, h, d
-          nb_correct_u = torch.sum((pred_arcs * arc_adja).int()).item()
-          nb_gold = torch.sum(arc_adja).item()
-          nb_pred = torch.sum(pred_arcs).item()
-          task2nbcorrect['a'] = (nb_correct_u, nb_gold, nb_pred)
+        pred_arcs = (S_arc > 0).int() * pad_masks  # b, h, d
+        nb_correct_u = torch.sum((pred_arcs * arc_adja).int()).item()
+        nb_gold = torch.sum(arc_adja).item()
+        nb_pred = torch.sum(pred_arcs).item()
+        task2nbcorrect['a'] = (nb_correct_u, nb_gold, nb_pred)
 
         if 'l' in self.task2i:
             # labeled
@@ -718,6 +748,17 @@ mlp_lab_o_size = 400
             nb_correct_u_and_l = torch.sum((pred_labels == lab_adja).float() * pred_arcs).item()
             task2nbcorrect['l'] = (nb_correct_u_and_l, nb_gold, nb_pred)
 
+        alt_pred_arcs = {}
+        if 'dpa' in self.task2i:
+          dpa_pred_arcs = (S_dpa_arc > 0).int() * pad_masks  # b, h, d
+          alt_pred_arcs['dpa'] = dpa_pred_arcs
+          nb_correct_u = torch.sum((pred_arcs * arc_adja).int()).item()
+          task2nbcorrect['adpa'] = (nb_correct_u, nb_gold, nb_pred)
+          if 'l' not in self.task2i:          
+            pred_labels = torch.argmax(S_lab, dim=1)
+          nb_correct_u_and_l = torch.sum((pred_labels == lab_adja).float() * dpa_pred_arcs).item()
+          task2nbcorrect['ldpa'] = (nb_correct_u_and_l, nb_gold, nb_pred)
+            
         # NB: round predicted numbers of heads / deps for evaluation only
         if 'h' in self.task2i:
           pred_nbheads = torch.round(torch.exp(log_pred_nbheads) - 1).int()
@@ -749,7 +790,6 @@ mlp_lab_o_size = 400
           task2preds['s'] = pred_slabseqs
 
         # alternative ways to predict arcs
-        alt_pred_arcs = {}
         if make_alt_preds:
           # tensors for other ways to predict arcs, 
           #           according to best xxx scores for each dependent d
@@ -898,13 +938,16 @@ mlp_lab_o_size = 400
             val_task2loss = defaultdict(int)
             val_task2nbcorrect = defaultdict(int)
             val_nb_toks = 0
-            
-            if 'a' in self.task2i:
-              train_task2nbcorrect['a'] = [0,0,0] # tasks with fscore metric we have a triplet nbcorrect, nbgold, nbpred
-              val_task2nbcorrect['a'] = [0,0,0] 
-            if 'l' in self.task2i:
-              train_task2nbcorrect['l'] = [0,0,0]
-              val_task2nbcorrect['l'] = [0,0,0] 
+
+            for t in ['a','l']:
+              if t in self.task2i:
+                train_task2nbcorrect[t] = [0,0,0] # tasks with fscore metric we have a triplet nbcorrect, nbgold, nbpred
+                val_task2nbcorrect[t] = [0,0,0] 
+            if 'dpa' in self.task2i:
+              train_task2nbcorrect['ldpa'] = [0,0,0]
+              val_task2nbcorrect['ldpa'] = [0,0,0] 
+              train_task2nbcorrect['adpa'] = [0,0,0]
+              val_task2nbcorrect['adpa'] = [0,0,0] 
 
             # training mode (certain modules behave differently in train / eval mode)
             self.train()
@@ -930,7 +973,7 @@ mlp_lab_o_size = 400
                 train_nb_toks += nb_toks
                 for k in self.tasks:
                   train_task2loss[k] += task2loss[k]
-                  if k in ['a','l']: 
+                  if k in ['a','l','adpa','ldpa']: 
                     for i in [0,1,2]:
                       train_task2nbcorrect[k][i] += task2nbcorrect[k][i]
                   elif k not in ['g', 'scorearcnbd', 'scorearcnbh']:
@@ -942,7 +985,7 @@ mlp_lab_o_size = 400
 
             for k in self.tasks:
               train_task2loss[k] /= train_data.nb_words
-              if k in ['a', 'l']:
+              if k in ['a', 'l','adpa','ldpa']:
                 train_task2accs[k].append(fscore(*train_task2nbcorrect[k]))
               elif k not in ['g', 'scorearcnbd', 'scorearcnbh']:
                 train_task2accs[k].append( 100 * train_task2nbcorrect[k] / train_nb_toks )            
