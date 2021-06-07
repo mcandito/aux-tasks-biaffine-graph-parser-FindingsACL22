@@ -145,7 +145,7 @@ if __name__ == "__main__":
 
         # -----  task definition ----------------------------
         tasks = args.tasks.lower().split('.')
-        if sum([ int(t not in ['a','l','h','d','s','b']) for t in tasks ]) > 0:
+        if sum([ int(t not in ['a','l','h','d','s','b','dpa']) for t in tasks ]) > 0:
           exit("ERROR: tasks should be among a l h d s b")
         coeff_aux_task_as_input = {}
         if args.coeff_aux_task_as_input != 'None':
