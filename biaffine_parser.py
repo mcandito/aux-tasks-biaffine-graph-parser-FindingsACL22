@@ -956,15 +956,9 @@ mlp_lab_o_size = 400
             # training mode (certain modules behave differently in train / eval mode)
             self.train()
             train_data.lex_dropout(lex_dropout) 
-            bid = 0
             trace_first = True
             for batch in train_data.make_batches(self.batch_size, shuffle_data=True, sort_dec_length=True, shuffle_batches=True):        
                 self.zero_grad()
-                bid += 1
-                if bid % 2000 == 0:
-                  print("BATCH SHAPE:", batch[2].shape, batch[5].shape)
-                  print("MEMORY BEFORE BATCH FORWARD AND LOSS")
-                  printm()
 
                 loss, task2loss, task2nbcorrect, nb_toks = self.batch_forward_and_loss(batch, trace_first=trace_first)
                 trace_first = False
