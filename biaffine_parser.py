@@ -218,8 +218,8 @@ mlp_lab_o_size = 400
         if 'dpa' in self.task2i:
           self.dpa_arc_d_mlp = MLP(s, a, a, dropout=mlp_arc_dropout).to(device)
           self.dpa_arc_h_mlp = MLP(s, a, a, dropout=mlp_arc_dropout).to(device)  
-          self.dpa_previoush_linear_layer = nn.Linear(a, int(a/2)).to(self.device)
-          self.dpa_biaffine_arc = BiAffine(device, a, a + int(a/2), use_bias=self.use_bias)
+          #self.dpa_previoush_linear_layer = nn.Linear(a, int(a/2)).to(self.device)
+          self.dpa_biaffine_arc = BiAffine(device, a, 2*a, use_bias=self.use_bias)
         
 
         # ------ stack propagation of aux tasks hidden representations ----
@@ -457,15 +457,18 @@ mlp_lab_o_size = 400
 
         if 'dpa' in self.task2i:
           # for each d(ep), sum the arc_h representations of the predicted heads of d
-          pred_arcs = (S_arc > 0).int() * b_pad_masks  # b, h, d
-          # pred_arcs.unsqueeze(3)                     # => b, h, d, 1
-          # arc_h.unsqueeze(2)                         # => b, h, 1, mlp_arc_o_size
-          x = pred_arcs.unsqueeze(3) * arc_h.unsqueeze(2) # b, h, d, mlp_arc_o_size
-          x = torch.sum(x,dim=1)                          # b, h, d, mlp_arc_o_size => b, d, mlp_arc_o_size
-
+          #@ pred_arcs = (S_arc > 0).int() * b_pad_masks  # b, h, d
+          #@ # pred_arcs.unsqueeze(3)                     # => b, h, d, 1
+          #@ # arc_h.unsqueeze(2)                         # => b, h, 1, mlp_arc_o_size
+          #@ x = pred_arcs.unsqueeze(3) * arc_h.unsqueeze(2) # b, h, d, mlp_arc_o_size
+          #@ x = torch.sum(x,dim=1)                          # b, h, d, mlp_arc_o_size => b, d, mlp_arc_o_size
+          #@ try instead: sum all representations of heads for this dep
+          x = torch.sum(S_arc * b_pad_masks, dim=1)
+          
           # pass into a linear layer to reduce dim
-          x = self.dpa_previoush_linear_layer(x)  # b, d, mlp_arc_o_size/2
+          #@@x = self.dpa_previoush_linear_layer(x)  # b, d, mlp_arc_o_size/2
 
+        
           # specific MLPs for the second arc prediction
           dpa_arc_h = self.dpa_arc_h_mlp(lstm_hidden_seq) # [b, h=max_seq_len, mlp_arc_o_size]
           dpa_arc_d = self.dpa_arc_d_mlp(lstm_hidden_seq) # [b, d=max_seq_len, mlp_arc_o_size]
