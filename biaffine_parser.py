@@ -461,9 +461,10 @@ mlp_lab_o_size = 400
           #@ # pred_arcs.unsqueeze(3)                     # => b, h, d, 1
           #@ # arc_h.unsqueeze(2)                         # => b, h, 1, mlp_arc_o_size
           #@ x = pred_arcs.unsqueeze(3) * arc_h.unsqueeze(2) # b, h, d, mlp_arc_o_size
-          #@ x = torch.sum(x,dim=1)                          # b, h, d, mlp_arc_o_size => b, d, mlp_arc_o_size
+
           #@ try instead: sum all representations of heads for this dep
-          x = torch.sum(S_arc * b_pad_masks, dim=1)
+          x = (S_arc * b_pad_masks).unsqueeze(3) * arc_h.unsqueeze(2)
+          x = torch.sum(x,dim=1)                          # b, h, d, mlp_arc_o_size => b, d, mlp_arc_o_size
           
           # pass into a linear layer to reduce dim
           #@@x = self.dpa_previoush_linear_layer(x)  # b, d, mlp_arc_o_size/2
