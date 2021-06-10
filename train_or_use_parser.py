@@ -17,9 +17,9 @@ from indexed_data import *
 from biaffine_parser import *
 
 # taken from https://gist.github.com/okomarov/c0d9fd0718f6f9b40c701e61523dfed1
-import psutil
-import humanize
-import GPUtil
+#@ import psutil
+#@ import humanize
+#@ import GPUtil
 
 
 # TODO get least used gpu
