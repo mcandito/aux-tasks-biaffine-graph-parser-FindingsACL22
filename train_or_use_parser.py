@@ -83,26 +83,6 @@ if __name__ == "__main__":
     args = argparser.parse_args()
 
 
-    # --------------------- DEVICE ---------------------
-    # si un GPU est disponible on l'utilisera
-    if torch.cuda.is_available():
-        # objet torch.device          
-        DEVICE = torch.device("cuda:"+str(args.device_id))
-        
-        print('There are %d GPU(s) available.' % torch.cuda.device_count())    
-        device_id = args.device_id #torch.cuda.current_device()
-        gpu_properties = torch.cuda.get_device_properties(device_id)
-        print("We will use GPU %d (%s) of compute capability %d.%d with "
-              "%.2fGb total memory.\n" % 
-              (device_id,
-               gpu_properties.name,
-               gpu_properties.major,
-               gpu_properties.minor,
-               gpu_properties.total_memory / 1e9))
-
-    else:
-        print('No GPU available, using the CPU instead.')
-        DEVICE = torch.device("cpu")
 
     model_file = args.model_dir+'/model'
 
@@ -112,8 +92,37 @@ if __name__ == "__main__":
       bert_tokenizer = None
       args.bert_name = None
 
+    # parsing mode
+    if args.mode == 'test':
+        sys.stderr.write("Parsing %s with %s ...\n" % (args.conll_file, model_file))
+        parser = torch.load(model_file)
+        DEVICE = parser.device
+        sys.stderr.write("loaded model %s\n" % (model_file))
+        indices = parser.indices
+        if args.graph_mode:
+            sentences = load_dep_graphs(args.conll_file, corpus_type='toparse')
+            dataset = DepGraphDataSet('toparse', sentences['toparse'], indices, DEVICE)
+            
+        else:
+            sentences = load_dep_trees(args.conll_file, corpus_type='toparse')
+            dataset = DepTreeDataSet('toparse', sentences['toparse'], indices, DEVICE)
+            
+        sys.stderr.write("parsing and evaluating conll file %s\n" % args.conll_file)
+
+        logstream = open(args.model_dir+'/log_parse', 'w')
+        
+        task2nbcorrect, task2acc = parser.predict_and_evaluate(dataset, logstream, out_file=args.out_parsed_file)
+        # print TODO
+        for stream in [sys.stderr, logstream]:
+          print(task2nbcorrect)
+          print(task2acc)
+          #r, p, f = rec_prec_fscore(nb_correct_u, nb_gold, nb_pred)
+          #stream.write("U R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % (r, p, f, args.conll_file))
+          #r, p, f = rec_prec_fscore(nb_correct_l, nb_gold, nb_pred)
+          #stream.write("L R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % (r, p, f, args.conll_file))
+
     # train model on train data and check performance on validation set
-    if args.mode == 'train':
+    else:
 
         # before anything: check whether we will be able to dump the model
         pdir = os.path.dirname(model_file)
@@ -121,6 +130,27 @@ if __name__ == "__main__":
         # if parent dir is writable
         if not os.access(pdir, os.W_OK):
             exit("Model file %s will not be writable!\n" % model_file)
+
+        # --------------------- DEVICE ---------------------
+        # si un GPU est disponible on l'utilisera
+        if torch.cuda.is_available():
+          # objet torch.device          
+          DEVICE = torch.device("cuda:"+str(args.device_id))
+        
+          print('There are %d GPU(s) available.' % torch.cuda.device_count())    
+          device_id = args.device_id #torch.cuda.current_device()
+          gpu_properties = torch.cuda.get_device_properties(device_id)
+          print("We will use GPU %d (%s) of compute capability %d.%d with %.2fGb total memory.\n" % 
+                (device_id,
+                 gpu_properties.name,
+                 gpu_properties.major,
+                 gpu_properties.minor,
+                 gpu_properties.total_memory / 1e9))
+
+        else:
+          print('No GPU available, using the CPU instead.')
+          DEVICE = torch.device("cpu")
+
 
         # ------------- DATA (WITHOUT INDICES YET) ------------------------------
         print('loading sentences...')
@@ -239,30 +269,3 @@ if __name__ == "__main__":
           'early_stopping':args.early_stopping,
         }
 
-    # parsing mode
-    else:
-        sys.stderr.write("Parsing %s with %s ...\n" % (args.conll_file, model_file))
-        parser = torch.load(model_file)
-        sys.stderr.write("loaded model %s\n" % (model_file))
-        indices = parser.indices
-        if args.graph_mode:
-            sentences = load_dep_graphs(args.conll_file, corpus_type='toparse')
-            dataset = DepGraphDataSet('toparse', sentences['toparse'], indices, DEVICE)
-            
-        else:
-            sentences = load_dep_trees(args.conll_file, corpus_type='toparse')
-            dataset = DepTreeDataSet('toparse', sentences['toparse'], indices, DEVICE)
-            
-        sys.stderr.write("parsing and evaluating conll file %s\n" % args.conll_file)
-
-        logstream = open(args.model_dir+'/log_parse', 'w')
-        
-        task2nbcorrect, task2acc = parser.predict_and_evaluate(dataset, logstream, out_file=args.out_parsed_file)
-        # print TODO
-        for stream in [sys.stderr, logstream]:
-          print(task2nbcorrect)
-          print(task2acc)
-          #r, p, f = rec_prec_fscore(nb_correct_u, nb_gold, nb_pred)
-          #stream.write("U R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % (r, p, f, args.conll_file))
-          #r, p, f = rec_prec_fscore(nb_correct_l, nb_gold, nb_pred)
-          #stream.write("L R = %5.2f P = %5.2f Fscore = %5.2f on %s\n" % (r, p, f, args.conll_file))
