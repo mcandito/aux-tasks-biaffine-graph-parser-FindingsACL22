@@ -1196,7 +1196,7 @@ mlp_lab_o_size = 400
           gold_nbdeps = arc_adja.sum(dim=2).float()  # [b, h, d] => [b, h]
           linear_pad_mask = pad_masks[:,0,:] 
           task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs, task2preds = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask,
-                                                                                                              S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs, make_alt_preds=make_alt_preds)
+                                                                                                              S_arc, S_lab, S_dpa_arc, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs, make_alt_preds=make_alt_preds)
           for k in self.tasks:
             if k in ['a','l']: 
               for i in [0,1,2]:
