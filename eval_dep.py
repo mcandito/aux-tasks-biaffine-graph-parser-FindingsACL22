@@ -66,12 +66,8 @@ usage = """ eval_dep.py gold and sys file """
 # read arguments
 argparser = argparse.ArgumentParser(usage = usage)
 argparser.add_argument('gold_and_pred_dep_graphs_file', help='Tabulated file with gold and predicted dep graphs', default=None)
-argparser.add_argument('--split_info_file', help='split info file (each line = sentence id, tab, corpus type (train, dev, test)', default=None)
-argparser.add_argument('--data_name', help='short name of data: ftb or sequoia etc... Default=ftb', default='ftb')
 argparser.add_argument('-g', '--graph_mode', action="store_true", help='If set, Graph version of the parser, otherwise Tree version. Default=True', default=True)
 argparser.add_argument('-c', '--prediction_column', type=int, help='column id (starting at 0) for prediction of arcs (and next column should be prediction of labels). Default=4', default=4)
-argparser.add_argument('-p', '--w_emb_file', help='If not "None", pre-trained word embeddings file. NB: first line should contain nbwords embedding size', default='None')
-argparser.add_argument('-t', '--trace', action="store_true", help='print some traces. Default=False', default=False)
 args = argparser.parse_args()
 
 
@@ -270,7 +266,11 @@ for l in sorted(l2dist['g'].keys()):
         s = np.sign(gmean)
         a = len([ dist for dist in l2dist['p'][l] if np.sign(dist) != s ])
         t = len(l2dist['p'][l])
-        print("LABEL %13s : proportion of odd direction in predicted arcs : %5.2f (%d / %d)" % (l, 100 * a / t, a , t))
+        if t != 0:
+            print("LABEL %13s : proportion of odd direction in predicted arcs : %5.2f (%d / %d)" % (l, 100 * a / t, a , t))
+        else:
+            print("LABEL %13s : proportion of odd direction in predicted arcs : %5.2f (%d / %d)" % (l, 0.0, a , t))
+
 
 glseqs = set(lseqs2occ['g'].keys())
 plseqs = set(lseqs2occ['p'].keys())
