@@ -1178,7 +1178,7 @@ mlp_lab_o_size = 400
           lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols, slabseqs = batch
 
           # forward 
-          S_arc, S_lab, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs = self(forms, lemmas, tags, bert_tokens, bert_ftid_rkss, pad_masks, lengths=lengths)
+          S_arc, S_lab, S_dpa_arc, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs = self(forms, lemmas, tags, bert_tokens, bert_ftid_rkss, pad_masks, lengths=lengths)
 
           linear_pad_mask = pad_masks[:,0,:] # from [b, m, m] to [b, m]
           test_nb_toks += linear_pad_mask.sum().item()
