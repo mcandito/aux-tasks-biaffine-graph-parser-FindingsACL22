@@ -54,9 +54,9 @@ do for LR in 0.00002;# 0.00001;# 0.00001;
    do for MLP_ARC_O_SIZE in 600; #400;# 300; # used for ARC and LAB # 600 is too big
       do for P_EMB_SIZE in 0;# 50;# with or without POS
 	 do for EMB_FILE in None ; #$D/vecs100-linear-frwiki; # with or without embeddings
-	    do for TASKS in a.l.h.s.b.d; #a.l.b.h.s; #a.l.h.d.s; #a.l ; #a.l.h.s ;# a.l.h.s.b;#a.l.h;
+	    do for TASKS in a.s.l; #a.h.l ;#a.b.h.l; #a.d.h.l a.d.h.l.s; #a.l a.b.h.l; #a.b.d.h.l.s a.h.l.s a.d.h.l.s a.b.h.l.s; #a.l.b.h.s; #a.l.h.d.s; #a.l ; #a.l.h.s ;# a.l.h.s.b;#a.l.h;
 	       do for LSTM_DROPOUT in 0.33; # 0.2; 
-		  do for COEFFS_STACK_PROPAG in b:1.s:5.h:10 s:20.h:20 b:5.s:20.h:20 None; # None s:5.h:20 s:100.h:20;
+		  do for COEFFS_STACK_PROPAG in None; #h:10; #b:1.h:10 b:1.h:20;
 		     do for i in 1 2 3; # 3 runs with same config
 			do
 			    timestamp=$(date "+%Y-%m-%d-%H-%M-%S");

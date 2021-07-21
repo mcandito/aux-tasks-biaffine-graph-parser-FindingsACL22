@@ -33,7 +33,7 @@ P_EMB_SIZE=0
 
 NB_EPOCHS=30 #
 
-BATCH_SIZE=12 #8
+BATCH_SIZE=8 #12 #8
 
 BERT_NAME=flaubert/flaubert_base_cased
 #BERT_NAME=''
