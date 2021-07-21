@@ -1,6 +1,6 @@
 # biaffine-graph-parser
 
-Re-implementation of the biaffine parser for producing dependency graphs [(Dozat et al., 2018)](https://aclanthology.org/P18-2077/)
+Re-implementation of the biaffine parser for producing dependency graphs [(Dozat et al., 2018)](https://aclanthology.org/P18-2077/), with additional auxiliary tasks.
 
 Marie Candito
 
