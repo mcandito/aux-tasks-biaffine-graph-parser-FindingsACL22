@@ -76,7 +76,9 @@ mlp_lab_o_size = 400
                  reduced_bert_size=0,
                  freeze_bert=False,
                  mtl_sharing_level=1, # levels of parameter sharing in mtl 1: bert+lstm only, 2: best+lstm+mlp
+                 # output of aux task used as input features for tasks A / L
                  coeff_aux_task_as_input={}, # {'s':5, 'h':20},
+                 # hidden layer of aux task used as input features for tasks A / L
                  coeff_aux_task_stack_propag={}, #{'b':1, 'h':10, 's':2, 'd':1}
     ):
         super(BiAffineParser, self).__init__()
