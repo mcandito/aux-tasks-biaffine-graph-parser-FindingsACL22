@@ -1,8 +1,6 @@
 # biaffine-graph-parser
 
-Re-implementation of the biaffine parser, both for producing 
- * trees (Dozat et al., 2017), 
- * or graphs (Dozat et al., 2018) 
+Re-implementation of the biaffine parser for producing dependency graphs (Dozat et al., 2018)
 
 Marie Candito
 
