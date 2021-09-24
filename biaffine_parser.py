@@ -183,7 +183,12 @@ mlp_lab_o_size = 400
               for p in self.bert_layer.parameters():
                 p.requires_grad = False
 
-            bert_size = self.bert_layer.config.emb_dim
+            # flaubert...
+            if 'emb_dim' in self.bert_layer.config.__dict__:
+                bert_size = self.bert_layer.config.emb_dim
+            # bert...
+            else:
+                bert_size = self.bert_layer.config.hidden_size
             if reduced_bert_size > 0:
                 self.bert_linear_reduction = nn.Linear(bert_size, reduced_bert_size).to(self.device)
                 self.lexical_emb_size += reduced_bert_size
