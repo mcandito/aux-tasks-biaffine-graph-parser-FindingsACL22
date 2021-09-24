@@ -51,7 +51,7 @@ if __name__ == "__main__":
     argparser.add_argument('--split_info_file', help='split info file (each line = sentence id, tab, corpus type (train, dev, test)', default=None)
     argparser.add_argument('-v', '--validation_conll_file', help='pertains only if split_info_file is not provided: validation sentences, will be used to evaluate model during training, and for early stopping')
     argparser.add_argument('--data_name', help='short name of data: ftb or sequoia etc... Default=ftb', default='ftb')
-    argparser.add_argument('-g', '--graph_mode', action="store_true", help='If set, Graph version of the parser, otherwise Tree version. Default=True', default=True)
+    argparser.add_argument('-g', '--data_format', choices=['tree', 'sdp', 'deep'], help='type of input and format: "tree"= conllu dependency trees, "deep"=conllu compact dependency graphs (pipe-separated governors), "sdp" = sdp 2015 dependency graphs. Default=deep', default='deep')
     argparser.add_argument('-p', '--w_emb_file', help='If not "None", pre-trained word embeddings file. NB: first line should contain nbwords embedding size', default='None')
     argparser.add_argument('-w', '--w_emb_size', help='size of word embeddings. Default=100', type=int, default=100)
     argparser.add_argument('-l', '--l_emb_size', help='size of lemma embeddings. Default=100', type=int, default=100)
@@ -99,11 +99,15 @@ if __name__ == "__main__":
         DEVICE = parser.device
         sys.stderr.write("loaded model %s\n" % (model_file))
         indices = parser.indices
-        if args.graph_mode:
-            sentences = load_dep_graphs(args.conll_file, corpus_type='toparse')
+        if args.data_format in ['deep', 'sdp']:
+            if args.data_format == 'deep':
+              sentences = load_dep_graphs(args.conll_file, corpus_type='toparse')
+            else:
+              sentences = load_dep_graphs_sdp_format(args.conll_file, corpus_type='toparse')
+            graph_mode = True
             dataset = DepGraphDataSet('toparse', sentences['toparse'], indices, DEVICE)
-            
         else:
+            graph_mode = False
             sentences = load_dep_trees(args.conll_file, corpus_type='toparse')
             dataset = DepTreeDataSet('toparse', sentences['toparse'], indices, DEVICE)
             
@@ -155,10 +159,16 @@ if __name__ == "__main__":
         # ------------- DATA (WITHOUT INDICES YET) ------------------------------
         print('loading sentences...')
         split_info_file = args.split_info_file
-        if args.graph_mode:
-            load_fn = 'load_dep_graphs'
+        if args.data_format in ['deep', 'sdp']:
+            graph_mode = True
+            if args.data_format == 'deep':
+              load_fn = 'load_dep_graphs'
+            else:
+              load_fn = 'load_dep_graphs_sdp_format'
         else:
+            graph_mode = False
             load_fn = 'load_dep_trees'
+
         if split_info_file:
             sentences = eval(load_fn)(args.conll_file, split_info_file=split_info_file)
         else:
@@ -209,7 +219,7 @@ if __name__ == "__main__":
         print('indexing data...')
         data = {}
         for part in sentences.keys():
-            if args.graph_mode:
+            if graph_mode:
                 data[part] = DepGraphDataSet(part, sentences[part], indices, DEVICE)
             else:
                 data[part] = DepTreeDataSet(part, sentences[part], indices, DEVICE)
@@ -246,7 +256,7 @@ if __name__ == "__main__":
                                    args.batch_size,
                                    args.learning_rate,
                                    args.lex_dropout,
-                                   graph_mode = args.graph_mode)
+                                   graph_mode = graph_mode)
                 
         # TODO: use this opt...
         opt = {
@@ -262,7 +272,7 @@ if __name__ == "__main__":
           'bert_name':args.bert_name,
           'tasks':args.tasks,
           'model_file':args.model_dir+'/model',
-          'graph_mode':args.graph_mode,
+          'graph_mode':graph_mode,
           'lr':args.learning_rate,
           'lex_dropout':args.lex_dropout,
           'nb_epochs':args.nb_epochs,
