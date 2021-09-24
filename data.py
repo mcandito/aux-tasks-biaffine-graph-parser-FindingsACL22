@@ -21,16 +21,13 @@ PAD_HEAD_RK = -1 # for tree mode only: id for head of padded dep token
 
 def load_dep_graphs_sdp_format(gold_sdp_file, corpus_type='train', split_info={'test':[21], 'dev':[20]}):
     """
-        Inputs: - conll(u) file with dependency graphs
-                    (columns HEAD and GOV are pipe-separated values)
+        Inputs: - sdp file as in SDP 2015 shared task
 
                 - either provide one of the following:
                     - corpus_type : smthing like 'train', 'dev' etc...
                     - split_info: dictionary for sections to consider for each type (test, dev) ...
 
-
-        Returns 3 dictionaries (whose keys are corpus types (train/dev/test/val))
-        - sentences dictionary
+        Returns sentence dictionary (whose keys are corpus types (train/dev/test/val))
           - key = corpus type
           - value = list of sentences, 
                     each sentence is a list of 5-tuples :
@@ -128,11 +125,11 @@ def load_dep_trees(gold_conll_file, corpus_type='all', split_info_file=None, val
                   (the validation part representing the provided proportion 
                   of the original training file)
 
-        Returns 3 dictionaries (whose keys are corpus types (train/dev/test/val))
-        - sentences dictionary
+        Returns sentence dictionary (whose keys are corpus types (train/dev/test/val))
           - key = corpus type
           - value = list of sentences, 
-                    each sentence is a list of 5-tuples [form, lemma, tag, gov, label]                                
+                    each sentence is a list of 5-tuples :
+                    [form, lemma, tag, gov, label]                                
     """
     if split_info_file:
         # lecture du fichier donnant la répartition usuelle des phrases en train / dev / test
@@ -222,8 +219,7 @@ def load_dep_graphs(gold_conll_file, corpus_type='all', split_info_file=None, us
                   (the validation part representing the provided proportion 
                   of the original training file)
 
-        Returns 3 dictionaries (whose keys are corpus types (train/dev/test/val))
-        - sentences dictionary
+        Returns sentence dictionary
           - key = corpus type
           - value = list of sentences, 
                     each sentence is a list of 5-tuples :
