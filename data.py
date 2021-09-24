@@ -56,10 +56,11 @@ def load_dep_graphs_sdp_format(gold_sdp_file, corpus_type='train', split_info={'
                 sentid = line[2:]
             continue
         if not line:
-            if section in section2part:
-                part = section2part[section]
-            else:
-                part = corpus_type
+            # deactivate reading of section => use corpus_type declaration instead
+            #if section in section2part:
+            #    part = section2part[section]
+            #else:
+            part = corpus_type
             # replace predrks by pred linear indices
             for tok in sent:
                 for i,gov_predrk in enumerate(tok[3]):
@@ -84,8 +85,6 @@ def load_dep_graphs_sdp_format(gold_sdp_file, corpus_type='train', split_info={'
             pred = cols[5]
             frame = cols[6]
 
-            if pred == '+':
-                predrks2lidxs += lidx
             govs = []
             labels = []
             if top == '+':
