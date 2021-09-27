@@ -19,13 +19,15 @@ DROP_ID = 2
 PAD_HEAD_RK = -1 # for tree mode only: id for head of padded dep token
 
 
-def load_dep_graphs_sdp_format(gold_sdp_file, corpus_type='train', split_info={'test':[21], 'dev':[20]}):
+def load_dep_graphs_sdp_format(gold_sdp_file, corpus_type='train', split_info=None):
     """
         Inputs: - sdp file as in SDP 2015 shared task
 
-                - either provide one of the following:
-                    - corpus_type : smthing like 'train', 'dev' etc...
-                    - split_info: dictionary for sections to consider for each type (test, dev) ...
+                - corpus_type : smthing like 'train', 'dev' etc... = default corpus type
+                  (default = train)
+                - optional: split_info: dictionary for sections to consider for each type (test, dev) ...
+                      {'test':[21], 'dev':[20]} 
+                      (other sections will be typed as corpus_type)
 
         Returns sentence dictionary (whose keys are corpus types (train/dev/test/val))
           - key = corpus type
@@ -56,11 +58,10 @@ def load_dep_graphs_sdp_format(gold_sdp_file, corpus_type='train', split_info={'
                 sentid = line[2:]
             continue
         if not line:
-            # deactivate reading of section => use corpus_type declaration instead
-            #if section in section2part:
-            #    part = section2part[section]
-            #else:
-            part = corpus_type
+            if section in section2part:
+                part = section2part[section]
+            else:
+                part = corpus_type
             # replace predrks by pred linear indices
             for tok in sent:
                 for i,gov_predrk in enumerate(tok[3]):
