@@ -286,10 +286,12 @@ class Indices:
             - a list of sentences (list of tokens, 1 tok = a 5-tuple)
               (each has a <root> dummy first symbol)
             Output:
-            - bert tokenization : list of token id sequences 
-              (WITHOUT the dummy root)
-            - list of list of token ranks for the first token of each word
-                in the *BERT tokenization of each sequence
+            - bert tokenization : list of bert-token id sequences 
+            - list of list : for each sent s, 
+                                 for each word-token w : 
+                                    rank, in the *BERT tokenization of s,
+                                    of the first bert-token of w
+                                    
         """
         # pour chaque mot dans sentence, tokenisé en t1 t2 ... tn, 
         # on calcule les rangs qu'auraient le premier et le dernier token, t1 et tn
@@ -299,10 +301,15 @@ class Indices:
         first_tok_rankss = []
 
         tkz = self.bert_tokenizer
+
+        if tkz.bos_token_id != None:
+            bos_token_id = tkz.bos_token_id # flaubert
+        else:
+            bos_token_id = tkz.cls_token_id # bert
         
         for sent in sentences:
             (forms, lemmas, tags, heads, labels, _) = list(zip(*sent))
-            tid_seq = [ tkz.bos_token_id ]
+            tid_seq = [ bos_token_id ]
             first_tok_ranks = [ 0 ] # rank of bos # will be used for bert embedding of <root> token
             start = 1
             # removing <root> token

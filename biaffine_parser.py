@@ -185,15 +185,16 @@ mlp_lab_o_size = 400
 
             # flaubert...
             if 'emb_dim' in self.bert_layer.config.__dict__:
-                bert_size = self.bert_layer.config.emb_dim
+              self.bert_hidden_size = self.bert_layer.config.emb_dim
             # bert...
             else:
-                bert_size = self.bert_layer.config.hidden_size
+              self.bert_hidden_size = self.bert_layer.config.hidden_size
+
             if reduced_bert_size > 0:
-                self.bert_linear_reduction = nn.Linear(bert_size, reduced_bert_size).to(self.device)
+                self.bert_linear_reduction = nn.Linear(self.bert_hidden_size, reduced_bert_size).to(self.device)
                 self.lexical_emb_size += reduced_bert_size
             else:
-                self.lexical_emb_size += bert_size
+                self.lexical_emb_size += self.bert_hidden_size
         else:
             self.bert_layer = None
             
@@ -325,7 +326,6 @@ mlp_lab_o_size = 400
             w_embs = torch.cat((w_embs, l_embs), dim=-1)
         
         if bert_tid_seqs is not None:
-            bert_emb_size = self.bert_layer.config.emb_dim
             bert_embs = self.bert_layer(bert_tid_seqs).last_hidden_state
             # select among the subword bert embedddings only the embeddings of the first subword of words
             #   - modify bert_ftid_rkss to serve as indices for gather:
@@ -333,8 +333,8 @@ mlp_lab_o_size = 400
             #     - repeat the token ranks index along the bert_emb dimension (expand better for memory)
             #     - gather : from bert_embs[batch_sample, all tid ranks, bert_emb_dim]
             #                to bert_embs[batch_sample, only relevant tid ranks, bert_emb_dim]
-            #bert_embs = torch.gather(bert_embs, 1, bert_ftid_rkss.unsqueeze(2).repeat(1,1,bert_emb_size))
-            bert_embs = torch.gather(bert_embs, 1, bert_ftid_rkss.unsqueeze(2).expand(-1,-1,bert_emb_size))
+            #bert_embs = torch.gather(bert_embs, 1, bert_ftid_rkss.unsqueeze(2).repeat(1,1,self.bert_hidden_size))
+            bert_embs = torch.gather(bert_embs, 1, bert_ftid_rkss.unsqueeze(2).expand(-1,-1,self.bert_hidden_size))
             if self.reduced_bert_size > 0:
                 bert_embs = self.bert_linear_reduction(bert_embs)
             w_embs = torch.cat((w_embs, bert_embs), dim=-1)
@@ -964,7 +964,7 @@ mlp_lab_o_size = 400
             self.train()
             train_data.lex_dropout(lex_dropout) 
             trace_first = True
-            for batch in train_data.make_batches(self.batch_size, shuffle_data=True, sort_dec_length=True, shuffle_batches=True):        
+            for batch in train_data.make_batches(self.batch_size, shuffle_data=True, sort_dec_length=True, shuffle_batches=True):
                 self.zero_grad()
 
                 loss, task2loss, task2nbcorrect, nb_toks = self.batch_forward_and_loss(batch, trace_first=trace_first)
