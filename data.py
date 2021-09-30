@@ -50,6 +50,7 @@ def load_dep_graphs_sdp_format(gold_sdp_file, corpus_type='train', split_info=No
     sent = [[ROOT_FORM, ROOT_LEMM, ROOT_TAG, [], [], '']]
     predrks2lidxs = [0] # the dummy root is the first "pred" (gov of top nodes)
     sent_rk = 0
+    section=None
     for line in stream.readlines():
         line = line.strip()
         if line.startswith('#'):
@@ -58,8 +59,9 @@ def load_dep_graphs_sdp_format(gold_sdp_file, corpus_type='train', split_info=No
                 sentid = line[2:]
             continue
         if not line:
-            if section in section2part:
+            if section and section in section2part:
                 part = section2part[section]
+                section=None
             else:
                 part = corpus_type
             # replace predrks by pred linear indices
