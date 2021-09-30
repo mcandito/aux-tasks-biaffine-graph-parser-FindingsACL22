@@ -77,7 +77,7 @@ if __name__ == "__main__":
     argparser.add_argument('--coeff_aux_task_as_input', help='"None" or dot-separated list of task:coeff pairs, with task s and/or h. Example: "s:5.h15", Default=""', default='None')
     argparser.add_argument('--coeff_aux_task_stack_propag', help='"None" or dot-separated list of task:coeff pairs, with task s and/or h. Example: "b:1.h:10.s:2", Default=""', default='None')
 #    argparser.add_argument('--nb_epochs_arc_only', help='Nb epocs to run using arc loss only. Default=0', type=int, default=0)
-    argparser.add_argument('--device_id', help='GPU cuda device id. Default=0', type=int, default=0)
+    argparser.add_argument('--device_id', help='in train mode only: GPU cuda device id (in test mode: device is read in model). Default=0', type=int, default=0)
     argparser.add_argument('-t', '--trace', action="store_true", help='print some traces. Default=False', default=False)
     argparser.add_argument('--out_parsed_file', help='Pertains in test mode only. If set to non None, filename into which predictions will be dumped', default=None)
     args = argparser.parse_args()
