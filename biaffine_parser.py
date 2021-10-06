@@ -733,7 +733,7 @@ mlp_lab_o_size = 400
         #     nb_gold, nb_pred, nb_correct_u, nb_correct_u_and_l = self.evaluate_tree_mode(batch, pred_heads, pred_labels)
 
 
-    def batch_study_scores(self, batch, S_arc, S_lab, pred_arcs, pred_labels, nb_toks):
+    def batch_study_scores(self, batch, S_arc, S_lab, pred_arcs, pred_labels):
       lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols, slabseqs = batch
 
       not_gold = (1 - arc_adja) * pad_masks
@@ -821,8 +821,8 @@ mlp_lab_o_size = 400
           task2preds['s'] = pred_slabseqs
 
         if study_scores:
-            nb_toks = linear_pad_mask.sum().item()
-            score_study = self.batch_study_scores(batch, S_arc, S_lab, pred_arcs, pred_labels, nb_toks)
+            score_study = self.batch_study_scores(batch, S_arc, S_lab, pred_arcs, pred_labels)
+            #print("SCORE_STUDY FOR BATCH", score_study)
         else:
             score_study = None
             
@@ -1243,6 +1243,7 @@ mlp_lab_o_size = 400
             for i in range(4):
               total_score_study[i][0] += score_study[i][0]
               total_score_study[i][1] += score_study[i][1]
+            print(total_score_study)
               
           for k in self.tasks:
             if k in ['a','l']: 
@@ -1293,7 +1294,10 @@ mlp_lab_o_size = 400
 
         if study_scores:
           for i,type in enumerate(['tp', 'tn', 'fp', 'fn']):
-              print(" Average scores for %s arcs : %f" % (type.upper(), score_study[i][0]/score_study[i][1]))
+              if total_score_study[i][1] > 0:
+                  print(" Average scores for %s arcs : %f" % (type.upper(), total_score_study[i][0]/total_score_study[i][1]))
+              else:
+                  print(" No %s arcs" % type.upper())
         return test_task2nbcorrect, test_task2acc
 
 # OBSOLETE        
