@@ -749,9 +749,9 @@ mlp_lab_o_size = 400
       # for tp, tn, fp, fn arcs
       typed_scores_and_nbarcs = [ (torch.sum(a).item(),
                                    torch.sum(S_arc_sigmoid * a).item(),
-                                   torch.sum( ((S_arc_sigmoid > 0.99).int() * a) ).item(),
                                    torch.sum( ((S_arc_sigmoid > 0.97).int() * a) ).item(),
-                                   torch.sum( ((S_arc_sigmoid < 0.01).int() * a) ).item(),
+                                   torch.sum( ((S_arc_sigmoid > 0.95).int() * a) ).item(),
+                                   torch.sum( ((S_arc_sigmoid < 0.001).int() * a) ).item(),
                                    torch.sum( ((S_arc_sigmoid < 0.0001).int() * a)).item(),
       ) for a in [tp, tn, fp, fn] ]
 
@@ -1301,9 +1301,9 @@ mlp_lab_o_size = 400
               if total_score_study[i][1] > 0:
                   n = total_score_study[i][0]
                   print(" Average scores for %10d %s arcs : %f " % (n, type, total_score_study[i][1]/n))
-                  print(" Nb %s arcs 0.99   <  score           : %d " % (type, total_score_study[i][2]))
-                  print(" Nb %s arcs 0.97   <  score <= 0.99   : %d " % (type, total_score_study[i][3] - total_score_study[i][2]))
-                  print(" Nb %s arcs 0.0001 <= score <  0.01   : %d " % (type, total_score_study[i][4] - total_score_study[i][5]))
+                  print(" Nb %s arcs 0.97   <  score           : %d " % (type, total_score_study[i][2]))
+                  print(" Nb %s arcs 0.95   <  score <= 0.97   : %d " % (type, total_score_study[i][3] - total_score_study[i][2]))
+                  print(" Nb %s arcs 0.0001 <= score <  0.001  : %d " % (type, total_score_study[i][4] - total_score_study[i][5]))
                   print(" Nb %s arcs           score <  0.0001 : %d " % (type, total_score_study[i][5]))
               else:
                   print(" No %s arcs" % type.upper())
