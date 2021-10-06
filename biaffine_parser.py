@@ -747,8 +747,13 @@ mlp_lab_o_size = 400
 
       # sigmoid scores and number of arcs in batch
       # for tp, tn, fp, fn arcs
-      typed_scores_and_nbarcs = [ (torch.sum(S_arc_sigmoid * a).item(),
-                               torch.sum(a).item()) for a in [tp, tn, fp, fn] ]
+      typed_scores_and_nbarcs = [ (torch.sum(a).item(),
+                                   torch.sum(S_arc_sigmoid * a).item(),
+                                   torch.sum( ((S_arc_sigmoid * a) > 0.99).int() ).item(),
+                                   torch.sum( ((S_arc_sigmoid * a) > 0.97).int() ).item(),
+                                   torch.sum( ((S_arc_sigmoid * a) < 0.01).int() ).item(),
+                                   torch.sum( ((S_arc_sigmoid * a) < 0.0001).int() ).item(),
+      ) for a in [tp, tn, fp, fn] ]
 
       return typed_scores_and_nbarcs
       
@@ -1200,8 +1205,8 @@ mlp_lab_o_size = 400
 
       total_score_study = None
       if study_scores:
-        # (total score, nb arcs) pairs, for each type of arc (tp, tn, fp, fn)
-        total_score_study = [ [0,0], [0,0], [0,0], [0,0] ]
+        # (nb arcs, total score) pairs, for each type of arc (tp, tn, fp, fn)
+        total_score_study = [ 6*[Ø], 6*[Ø], 6*[Ø], 6*[Ø] ]
           
       self.eval()
       test_nb_toks = 0
@@ -1241,9 +1246,8 @@ mlp_lab_o_size = 400
               study_scores=study_scores)
           if study_scores:
             for i in range(4):
-              total_score_study[i][0] += score_study[i][0]
-              total_score_study[i][1] += score_study[i][1]
-            print(total_score_study)
+              for j in range(len(total_score_study[i])):
+                total_score_study[i][j] += score_study[i][j]
               
           for k in self.tasks:
             if k in ['a','l']: 
@@ -1293,9 +1297,14 @@ mlp_lab_o_size = 400
             test_task2acc[k] = 100 * test_task2nbcorrect[k] / test_nb_toks
 
         if study_scores:
-          for i,type in enumerate(['tp', 'tn', 'fp', 'fn']):
+          for i,type in enumerate(['TP', 'TN', 'FP', 'FN']):
               if total_score_study[i][1] > 0:
-                  print(" Average scores for %s arcs : %f" % (type.upper(), total_score_study[i][0]/total_score_study[i][1]))
+                  n = total_score_study[i][0]
+                  print(" Average scores for %10d %s arcs : %f " % (type, total_score_study[i][1]/n))
+                  print(" Nb %s arcs 0.99   <  score         : %d " % (type, total_score_study[i][2]))
+                  print(" Nb %s arcs 0.97   <  score <= 0.99 : %d " % (type, total_score_study[i][3] - total_score_study[i][2]))
+                  print(" Nb %s arcs 0.0001 <= score < 0.01: %d " % (type, total_score_study[i][4] - total_score_study[i][5]))
+                  print(" Nb %s arcs           score < 0.0001 " % (type, total_score_study[i][5]))
               else:
                   print(" No %s arcs" % type.upper())
         return test_task2nbcorrect, test_task2acc
