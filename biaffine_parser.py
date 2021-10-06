@@ -1206,7 +1206,7 @@ mlp_lab_o_size = 400
       total_score_study = None
       if study_scores:
         # (nb arcs, total score) pairs, for each type of arc (tp, tn, fp, fn)
-        total_score_study = [ 6*[Ø], 6*[Ø], 6*[Ø], 6*[Ø] ]
+        total_score_study = [ 6*[0], 6*[0], 6*[0], 6*[0] ]
           
       self.eval()
       test_nb_toks = 0
