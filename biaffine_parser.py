@@ -1293,7 +1293,7 @@ mlp_lab_o_size = 400
 
         if study_scores:
           for i,type in enumerate(['tp', 'tn', 'fp', 'fn']):
-              print(" Average scores for %s arcs : %f" % (type.upper(), study_scores[i][0]/study_scores[i][1]))
+              print(" Average scores for %s arcs : %f" % (type.upper(), score_study[i][0]/score_study[i][1]))
         return test_task2nbcorrect, test_task2acc
 
 # OBSOLETE        
