@@ -1241,8 +1241,8 @@ mlp_lab_o_size = 400
               study_scores=study_scores)
           if study_scores:
             for i in range(4):
-              total_score_study[i][0] += study_scores[i][0]
-              total_score_study[i][1] += study_scores[i][1]
+              total_score_study[i][0] += score_study[i][0]
+              total_score_study[i][1] += score_study[i][1]
               
           for k in self.tasks:
             if k in ['a','l']: 
