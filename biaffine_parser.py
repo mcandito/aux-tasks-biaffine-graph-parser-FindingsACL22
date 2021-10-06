@@ -1300,7 +1300,7 @@ mlp_lab_o_size = 400
           for i,type in enumerate(['TP', 'TN', 'FP', 'FN']):
               if total_score_study[i][1] > 0:
                   n = total_score_study[i][0]
-                  print(" Average scores for %10d %s arcs : %f " % (type, total_score_study[i][1]/n))
+                  print(" Average scores for %10d %s arcs : %f " % (n, type, total_score_study[i][1]/n))
                   print(" Nb %s arcs 0.99   <  score         : %d " % (type, total_score_study[i][2]))
                   print(" Nb %s arcs 0.97   <  score <= 0.99 : %d " % (type, total_score_study[i][3] - total_score_study[i][2]))
                   print(" Nb %s arcs 0.0001 <= score < 0.01: %d " % (type, total_score_study[i][4] - total_score_study[i][5]))
