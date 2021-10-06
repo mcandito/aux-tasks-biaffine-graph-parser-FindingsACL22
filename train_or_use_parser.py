@@ -80,6 +80,7 @@ if __name__ == "__main__":
     argparser.add_argument('--device_id', help='in train mode only: GPU cuda device id (in test mode: device is read in model). Default=0', type=int, default=0)
     argparser.add_argument('-t', '--trace', action="store_true", help='print some traces. Default=False', default=False)
     argparser.add_argument('--out_parsed_file', help='Pertains in test mode only. If set to non None, filename into which predictions will be dumped', default=None)
+    argparser.add_argument('--study_scores', action="store_true", help='Pertains in test mode only. Is set, print study of arc scores.', default=False)
     args = argparser.parse_args()
 
 
@@ -115,7 +116,7 @@ if __name__ == "__main__":
 
         logstream = open(args.model_dir+'/log_parse', 'w')
         
-        task2nbcorrect, task2acc = parser.predict_and_evaluate(dataset, logstream, out_file=args.out_parsed_file)
+        task2nbcorrect, task2acc = parser.predict_and_evaluate(dataset, logstream, out_file=args.out_parsed_file, study_scores=args.study_scores)
         # print TODO
         for stream in [sys.stderr, logstream]:
           print(task2nbcorrect)

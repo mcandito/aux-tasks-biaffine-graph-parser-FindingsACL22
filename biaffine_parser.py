@@ -660,9 +660,9 @@ mlp_lab_o_size = 400
 
         # --- Prediction and evaluation --------------------------
         # provide the batch, and all the output of the forward pass
-        task2nbcorrect, _, _, _, _ = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask, 
-                                                                     S_arc, S_lab, S_dpa_arc, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs,
-                                                                     make_alt_preds)
+        task2nbcorrect, _, _, _, _, _ = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask, 
+                                                                        S_arc, S_lab, S_dpa_arc, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs,
+                                                                        make_alt_preds)
  
         return loss, task2loss, task2nbcorrect, nb_toks
 
@@ -732,11 +732,31 @@ mlp_lab_o_size = 400
         #     # --- Evaluation -------------------------
         #     nb_gold, nb_pred, nb_correct_u, nb_correct_u_and_l = self.evaluate_tree_mode(batch, pred_heads, pred_labels)
 
-    
+
+    def batch_study_scores(self, batch, S_arc, S_lab, pred_arcs, pred_labels, nb_toks):
+      lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols, slabseqs = batch
+
+      not_gold = (1 - arc_adja) * pad_masks
+      not_pred = (1 - pred_arcs) * pad_masks
+      tp = (arc_adja * pred_arcs).int() # true positives = 1
+      tn = (not_gold * not_pred).int()
+      fp = (not_gold * pred_arcs).int()
+      fn = (arc_adja * not_pred).int()
+
+      S_arc_sigmoid = torch.sigmoid(S_arc)
+
+      # sigmoid scores and number of arcs in batch
+      # for tp, tn, fp, fn arcs
+      typed_scores_and_nbarcs = [ (torch.sum(S_arc_sigmoid * a).item(),
+                               torch.sum(a).item()) for a in [tp, tn, fp, fn] ]
+
+      return typed_scores_and_nbarcs
+      
     def batch_predict_and_evaluate(self, batch, 
                                    gold_nbheads, gold_nbdeps, linear_pad_mask, # computed in batch_forward_and_loss
                                    S_arc, S_lab, S_dpa_arc, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs, # output by forward pass
-                                   make_alt_preds=False # whether to study other prediction algorithms
+                                   make_alt_preds=False, # whether to study other prediction algorithms
+                                   study_scores=False, # whether to study score distributions
                                    ):
 
       lengths, pad_masks, forms, lemmas, tags, bert_tokens, bert_ftid_rkss, arc_adja, lab_adja, bols, slabseqs = batch
@@ -799,6 +819,13 @@ mlp_lab_o_size = 400
           # count the unk slabseq as incorrect
           task2nbcorrect['sknown'] = task2nbcorrect['s'] - torch.sum((pred_slabseqs == UNK_ID).int() * linear_pad_mask).item()
           task2preds['s'] = pred_slabseqs
+
+        if study_scores:
+            nb_toks = linear_pad_mask.sum().item()
+            score_study = self.batch_study_scores(batch, S_arc, S_lab, pred_arcs, pred_labels, nb_toks)
+        else:
+            score_study = None
+            
 
         # alternative ways to predict arcs
         if make_alt_preds:
@@ -884,7 +911,7 @@ mlp_lab_o_size = 400
             nb_correct_u_and_l = torch.sum((pred_labels == lab_adja).float() * alt_pred_arcs[t]).item()
             task2nbcorrect['l' + t] = (nb_correct_u_and_l, nb_gold, nb_pred)
 
-      return task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs, task2preds
+      return task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs, task2preds, score_study
 
     def train_model(self, train_data, val_data, data_name, out_model_file, log_stream, nb_epochs, batch_size, lr, lex_dropout, graph_mode=True):
         """
@@ -1156,9 +1183,10 @@ mlp_lab_o_size = 400
           outstream.write("task %s\n" % k)          
         outstream.write("\n")
 
-    def predict_and_evaluate(self, test_data, log_stream, out_file=None):
+    def predict_and_evaluate(self, test_data, log_stream, out_file=None, study_scores=False):
       """ predict on test data and evaluate 
       if out_file is set, prediction will be dumped in readable format in out_file
+      if study_scores is set, the study of score distribution will be output to stdout
       """
       # TODO: tree mode
 
@@ -1169,8 +1197,12 @@ mlp_lab_o_size = 400
         task2stream['l'] = open(out_file + '.l', 'w')
       else:
         make_alt_preds = False
+
+      total_score_study = None
+      if study_scores:
+        # (total score, nb arcs) pairs, for each type of arc (tp, tn, fp, fn)
+        total_score_study = [ [0,0], [0,0], [0,0], [0,0] ]
           
-      
       self.eval()
       test_nb_toks = 0
       test_task2nbcorrect = defaultdict(int)
@@ -1202,8 +1234,16 @@ mlp_lab_o_size = 400
           gold_nbheads = arc_adja.sum(dim=1).float() # [b, h, d] => [b, d]
           gold_nbdeps = arc_adja.sum(dim=2).float()  # [b, h, d] => [b, h]
           linear_pad_mask = pad_masks[:,0,:] 
-          task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs, task2preds = self.batch_predict_and_evaluate(batch, gold_nbheads, gold_nbdeps, linear_pad_mask,
-                                                                                                              S_arc, S_lab, S_dpa_arc, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs, make_alt_preds=make_alt_preds)
+          task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs, task2preds, score_study = self.batch_predict_and_evaluate(
+              batch, gold_nbheads, gold_nbdeps, linear_pad_mask,
+              S_arc, S_lab, S_dpa_arc, log_pred_nbheads, log_pred_nbdeps, log_pred_bols, scores_slabseqs,
+              make_alt_preds=make_alt_preds,
+              study_scores=study_scores)
+          if study_scores:
+            for i in range(4):
+              total_score_study[i][0] += study_scores[i][0]
+              total_score_study[i][1] += study_scores[i][1]
+              
           for k in self.tasks:
             if k in ['a','l']: 
               for i in [0,1,2]:
@@ -1251,7 +1291,9 @@ mlp_lab_o_size = 400
           elif k not in ['g', 'scorearcnbd', 'scorearcnbh']:
             test_task2acc[k] = 100 * test_task2nbcorrect[k] / test_nb_toks
 
-
+        if study_scores:
+          for i,type in enumerate(['tp', 'tn', 'fp', 'fn']):
+              print(" Average scores for %s arcs : %f" % (type.upper(), study_scores[i][0]/study_scores[i][1]))
         return test_task2nbcorrect, test_task2acc
 
 # OBSOLETE        
