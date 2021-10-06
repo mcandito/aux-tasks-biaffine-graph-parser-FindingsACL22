@@ -149,6 +149,7 @@ for line in instream.readlines():
         else:
             gheads = []
             glabels = []
+            gbol = dict_like_bag_of_labels('')
             
         if cols[pred_col] != '_':
             pheads = cols[pred_col].split('|')  # 2|3
@@ -157,6 +158,7 @@ for line in instream.readlines():
         else:
             pheads = []
             plabels = []
+            pbol = dict_like_bag_of_labels('')
 
         gnbheads = len(gheads)
         pnbheads = len(pheads)
