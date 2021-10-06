@@ -749,10 +749,10 @@ mlp_lab_o_size = 400
       # for tp, tn, fp, fn arcs
       typed_scores_and_nbarcs = [ (torch.sum(a).item(),
                                    torch.sum(S_arc_sigmoid * a).item(),
-                                   torch.sum( ((S_arc_sigmoid * a) > 0.99).int() ).item(),
-                                   torch.sum( ((S_arc_sigmoid * a) > 0.97).int() ).item(),
-                                   torch.sum( ((S_arc_sigmoid * a) < 0.01).int() ).item(),
-                                   torch.sum( ((S_arc_sigmoid * a) < 0.0001).int() ).item(),
+                                   torch.sum( ((S_arc_sigmoid * a) > 0.99).int() * pad_masks ).item(),
+                                   torch.sum( ((S_arc_sigmoid * a) > 0.97).int() * pad_masks ).item(),
+                                   torch.sum( ((S_arc_sigmoid * a) < 0.01).int() * pad_masks ).item(),
+                                   torch.sum( ((S_arc_sigmoid * a) < 0.0001).int() * pad_masks ).item(),
       ) for a in [tp, tn, fp, fn] ]
 
       return typed_scores_and_nbarcs
