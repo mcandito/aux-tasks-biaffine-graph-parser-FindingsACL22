@@ -81,6 +81,9 @@ if __name__ == "__main__":
     argparser.add_argument('-t', '--trace', action="store_true", help='print some traces. Default=False', default=False)
     argparser.add_argument('--out_parsed_file', help='Pertains in test mode only. If set to non None, filename into which predictions will be dumped', default=None)
     argparser.add_argument('--study_scores', action="store_true", help='Pertains in test mode only. Is set, print study of arc scores.', default=False)
+    argparser.add_argument('--arc_loss', choices=['bce', 'hinge'], help='Which loss to use for the arcs. Default = bce (for binary_cross_entropy)', default='bce')
+    argparser.add_argument('--margin', help='Margin for hinge loss (cf. arc_loss). Default=1.0', type=float, default=1.0)
+    
     args = argparser.parse_args()
 
 
@@ -257,6 +260,8 @@ if __name__ == "__main__":
                                    args.batch_size,
                                    args.learning_rate,
                                    args.lex_dropout,
+                                   arc_loss=args.arc_loss,
+                                   margin=args.margin,
                                    graph_mode = graph_mode)
                 
         # TODO: use this opt...

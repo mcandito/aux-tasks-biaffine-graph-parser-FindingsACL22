@@ -5,6 +5,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# losses and submodules
+
+
 """
 
 ## Custom loss : binary cross-entropy over a matrix of scores, with padding cells
@@ -12,6 +15,46 @@ import torch.nn.functional as F
 
 from torch import Tensor
 from typing import Callable, Optional
+
+class BinaryHingeLoss_with_mask(nn.Module):
+    """
+    sum of binary Hinge loss on all over all the potential arcs
+
+    default margin = 1
+
+    see examples of losses in code https://pytorch.org/docs/stable/_modules/torch/nn/modules/loss.html
+    """
+    __constants__ = ['margin', 'reduction']
+    margin: float
+
+    def __init__(self, margin: float = 1.0) -> None:
+        super(BinaryHingeLoss_with_mask, self).__init__()
+        self.margin = margin
+
+    def forward(self, arc_scores: Tensor, target_arc_adja: Tensor, mask: Tensor) -> Tensor:
+        r"""
+        Sums the binary hinge loss over all the potential arcs:
+        
+        sum over all gold arcs a, with score s_a : of max(0, margin - s_a)
+        plus
+        sum over all gold non arcs a, with score s_a : of max(0, s_a - margin)
+        
+        Enforce that each gold arc gets a score > margin, 
+        and that each gold non arc gets a score < -margin
+        
+        """
+        non_gov = (1 - target_arc_adja) * mask
+
+        s = (arc_scores - self.margin)
+
+        # gold arcs not reaching margin
+        loss  = torch.sum(-s * ( (arc_scores <  self.margin).int() * target_arc_adja) )
+
+        # gold non arcs with score above -margin
+        loss += torch.sum( s * ( (arc_scores > -self.margin).int() * non_gov) )
+
+        return loss
+
 
 class BCEWithLogitsLoss_with_mask(nn.BCEWithLogitsLoss):
     r""" Customized BCEWithLogitsLoss

@@ -516,7 +516,7 @@ mlp_lab_o_size = 400
 
         # NB: all sents in batch start with the <root> tok (not padded)
         if 'a' in self.task2i:
-          arc_loss = self.bce_loss_with_mask(S_arc, arc_adja, pad_masks)
+          arc_loss = self.arc_loss(S_arc, arc_adja, pad_masks)
           ti = self.task2i['a']
           task2loss['a'] = arc_loss.item()
           loss +=  (dyn_loss_weights[ti] * arc_loss) + self.log_sigma2[ti]
@@ -541,7 +541,7 @@ mlp_lab_o_size = 400
           loss +=  (dyn_loss_weights[ti] * lab_loss) + self.log_sigma2[ti]
         
         if 'dpa' in self.task2i:
-          dpa_arc_loss = self.bce_loss_with_mask(S_dpa_arc, arc_adja, pad_masks)
+          dpa_arc_loss = self.arc_loss(S_dpa_arc, arc_adja, pad_masks)
           ti = self.task2i['dpa']
           task2loss['dpa'] = dpa_arc_loss.item()
           loss +=  (dyn_loss_weights[ti] * dpa_arc_loss) + self.log_sigma2[ti]
@@ -568,12 +568,12 @@ mlp_lab_o_size = 400
 
           # predicted nb head according the S_arc scores:
           S_arc_sigmoid = torch.sigmoid(S_arc) 
-          # over gold heads
-          S_arc_sigmoid_gold_arcs = S_arc_sigmoid * arc_adja # clamp to 0 the non-gold arcs
+          # over gold arcs
+          S_arc_sigmoid_gold_arcs = S_arc_sigmoid * arc_adja # clamp to 0 the gold non-arcs
           pred_scorearcnbh_arcs = S_arc_sigmoid_gold_arcs.sum(dim=1)
-          # over non gold heads
-          S_arc_sigmoid_nongold_arcs = S_arc_sigmoid * (1 - arc_adja) # clamp to 0 the gold arcs          
-          pred_scorearcnbh_nonarcs = S_arc_sigmoid_nongold_arcs.sum(dim=1)
+          # over gold non arcs
+          S_arc_sigmoid_gold_nonarcs = S_arc_sigmoid * (1 - arc_adja) # clamp to 0 the gold arcs          
+          pred_scorearcnbh_nonarcs = S_arc_sigmoid_gold_nonarcs.sum(dim=1)
           
           # for each dep, the predicted total nbheads for the gold heads should equal the gold nbheads
           ltemp = self.mse_loss_with_mask(pred_scorearcnbh_arcs, gold_nbheads, linear_pad_mask)
@@ -918,7 +918,7 @@ mlp_lab_o_size = 400
 
       return task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs, task2preds, score_study
 
-    def train_model(self, train_data, val_data, data_name, out_model_file, log_stream, nb_epochs, batch_size, lr, lex_dropout, graph_mode=True):
+    def train_model(self, train_data, val_data, data_name, out_model_file, log_stream, nb_epochs, batch_size, lr, lex_dropout, arc_loss='bce', margin=1.0, graph_mode=True):
         """
         CAUTION: does not work in tree mode anymore
         # TODO: recode the tree mode
@@ -946,7 +946,12 @@ mlp_lab_o_size = 400
         # used both for arc labels and for sorted label sequences (seen as atoms)
         self.ce_loss = nn.CrossEntropyLoss(reduction='sum', ignore_index=PAD_ID) # 'l', 's'
         # for graph mode arcs
-        self.bce_loss_with_mask = BCEWithLogitsLoss_with_mask(reduction='sum') # 'a'
+        if arc_loss == 'bce':
+            self.arc_loss = BCEWithLogitsLoss_with_mask(reduction='sum') # 'a'
+            self.margin = None
+        else:
+            self.margin = margin
+            self.arc_loss = BinaryHingeLoss_with_mask(margin=margin)
         # for tree mode arcs (and tree mode labels??)
         #   (CrossEnt cf. softmax not applied yet in BiAffine output)
         #   ignoring padded dep tokens (i.e. whose head equals PAD_HEAD_RK)
@@ -1162,7 +1167,7 @@ mlp_lab_o_size = 400
             self.log_values_suff = 'graph\t'
         else:
             self.log_values_suff = 'tree\t'
-        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level']
+        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss', 'margin']
 
         featvals = [ str(self.__dict__[f]) for f in featnames ]
 
