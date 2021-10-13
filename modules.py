@@ -37,7 +37,7 @@ class BinaryHingeLoss_with_mask(nn.Module):
         
         sum over all gold arcs a, with score s_a : of max(0, margin - s_a)
         plus
-        sum over all gold non arcs a, with score s_a : of max(0, s_a - margin)
+        sum over all gold non arcs a, with score s_a : of max(0, margin + s_a)
         
         Enforce that each gold arc gets a score > margin, 
         and that each gold non arc gets a score < -margin
@@ -45,13 +45,13 @@ class BinaryHingeLoss_with_mask(nn.Module):
         """
         non_gov = (1 - target_arc_adja) * mask
 
-        s = (arc_scores - self.margin)
-
         # gold arcs not reaching margin
-        loss  = torch.sum(-s * ( (arc_scores <  self.margin).int() * target_arc_adja) )
+        s = self.margin - arc_scores
+        loss  = torch.sum( s * ((s > 0).int() * target_arc_adja) )
 
         # gold non arcs with score above -margin
-        loss += torch.sum( s * ( (arc_scores > -self.margin).int() * non_gov) )
+        s = self.margin + arc_scores
+        loss += torch.sum( s * ((s > 0).int() * non_gov) )
 
         return loss
 
