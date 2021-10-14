@@ -50,12 +50,12 @@ class BinaryHingeLoss_with_mask(nn.Module):
         # gold arcs not reaching margin
         s = self.margin - arc_scores
         loss  = torch.sum( s * ((s > 0).int() * target_arc_adja) )
-        if pos_neg_weights:
+        if pos_neg_weights != None:
             loss = loss * pos_neg_weights[0]
 
         # gold non arcs with score above -margin
         s = self.margin + arc_scores
-        if pos_neg_weights:
+        if pos_neg_weights != None:
             loss = pos_neg_weights[1] * torch.sum( s * ((s > 0).int() * non_gov) )
         else:
             loss += torch.sum( s * ((s > 0).int() * non_gov) )
