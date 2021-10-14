@@ -80,6 +80,7 @@ mlp_lab_o_size = 400
                  coeff_aux_task_as_input={}, # {'s':5, 'h':20},
                  # hidden layer of aux task used as input features for tasks A / L
                  coeff_aux_task_stack_propag={}, #{'b':1, 'h':10, 's':2, 'd':1}
+                 use_dyn_weights_pos_neg=None,
     ):
         super(BiAffineParser, self).__init__()
 
@@ -121,6 +122,13 @@ mlp_lab_o_size = 400
         #print(self.nb_tasks)
         #print(self.named_parameters())
             
+        # ------------ weights for positive / negative examples in hinge loss ------------------------------
+        self.use_dyn_weights_pos_neg = use_dyn_weights_pos_neg
+        if use_dyn_weights_pos_neg:
+            self.pos_neg_weights = nn.Parameter(torch.ones(2, device=device))
+        else:
+            self.pos_neg_weights = None
+
         # ------------ Encoding of sequences ------------------------------
         self.lexical_emb_size = w_emb_size
         w_vocab_size = indices.get_vocab_size('w')
@@ -516,7 +524,7 @@ mlp_lab_o_size = 400
 
         # NB: all sents in batch start with the <root> tok (not padded)
         if 'a' in self.task2i:
-          arc_loss = self.arc_loss(S_arc, arc_adja, pad_masks)
+          arc_loss = self.arc_loss(S_arc, arc_adja, pad_masks, self.pos_neg_weights)
           ti = self.task2i['a']
           task2loss['a'] = arc_loss.item()
           loss +=  (dyn_loss_weights[ti] * arc_loss) + self.log_sigma2[ti]
@@ -541,7 +549,7 @@ mlp_lab_o_size = 400
           loss +=  (dyn_loss_weights[ti] * lab_loss) + self.log_sigma2[ti]
         
         if 'dpa' in self.task2i:
-          dpa_arc_loss = self.arc_loss(S_dpa_arc, arc_adja, pad_masks)
+          dpa_arc_loss = self.arc_loss(S_dpa_arc, arc_adja, pad_masks, self.pos_neg_weights)
           ti = self.task2i['dpa']
           task2loss['dpa'] = dpa_arc_loss.item()
           loss +=  (dyn_loss_weights[ti] * dpa_arc_loss) + self.log_sigma2[ti]
@@ -657,6 +665,8 @@ mlp_lab_o_size = 400
         if trace_first:
           for ti, task in enumerate(self.tasks):
             print("dyn_loss_w of task %s : %f" %(task.upper(), dyn_loss_weights[ti]))
+          if self.pos_neg_weights:
+            print("pos_neg_weights: pos %f / neg %f" %(self.pos_neg_weights[0].item(), self.pos_neg_weights[1].item()))
 
         # --- Prediction and evaluation --------------------------
         # provide the batch, and all the output of the forward pass
@@ -1169,7 +1179,7 @@ mlp_lab_o_size = 400
             self.log_values_suff = 'graph\t'
         else:
             self.log_values_suff = 'tree\t'
-        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss_type', 'margin']
+        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss_type', 'margin', 'use_dyn_weights_pos_neg']
 
         featvals = [ str(self.__dict__[f]) for f in featnames ]
 

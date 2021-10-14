@@ -31,7 +31,7 @@ class BinaryHingeLoss_with_mask(nn.Module):
         super(BinaryHingeLoss_with_mask, self).__init__()
         self.margin = margin
 
-    def forward(self, arc_scores: Tensor, target_arc_adja: Tensor, mask: Tensor) -> Tensor:
+    def forward(self, arc_scores: Tensor, target_arc_adja: Tensor, mask: Tensor, pos_neg_weights: Optional[Tensor] = None) -> Tensor:
         r"""
         Sums the binary hinge loss over all the potential arcs:
         
@@ -41,6 +41,8 @@ class BinaryHingeLoss_with_mask(nn.Module):
         
         Enforce that each gold arc gets a score > margin, 
         and that each gold non arc gets a score < -margin
+
+        pos_neg_weights : vector of 2 weights, for positive and negative examples (gold arcs and gold non arcs)
         
         """
         non_gov = (1 - target_arc_adja) * mask
@@ -48,10 +50,15 @@ class BinaryHingeLoss_with_mask(nn.Module):
         # gold arcs not reaching margin
         s = self.margin - arc_scores
         loss  = torch.sum( s * ((s > 0).int() * target_arc_adja) )
+        if pos_neg_weights:
+            loss = loss * pos_neg_weights[0]
 
         # gold non arcs with score above -margin
         s = self.margin + arc_scores
-        loss += torch.sum( s * ((s > 0).int() * non_gov) )
+        if pos_neg_weights:
+            loss = pos_neg_weights[1] * torch.sum( s * ((s > 0).int() * non_gov) )
+        else:
+            loss += torch.sum( s * ((s > 0).int() * non_gov) )
 
         return loss
 
@@ -93,11 +100,12 @@ class BCEWithLogitsLoss_with_mask(nn.BCEWithLogitsLoss):
         
         self.pos_weight_scalar = pos_weight_scalar
 
-    def forward(self, input: Tensor, target: Tensor, mask: Optional[Tensor] = None) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor, mask: Optional[Tensor] = None, pos_neg_weights: Optional[Tensor] = None) -> Tensor:
         """ 
         for each cell in input x and target y
         l_n = - ( pos_weight_scalar * y_n * log(sigma(x_n)) + (1 - y_n) * log (1 - sigma(x_n)) )
         """
+        # TODO: implement use of dynamic pos_neg_weights
         
         # non reduced version
         loss = F.binary_cross_entropy_with_logits(input, target,
