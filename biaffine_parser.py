@@ -665,7 +665,7 @@ mlp_lab_o_size = 400
         if trace_first:
           for ti, task in enumerate(self.tasks):
             print("dyn_loss_w of task %s : %f" %(task.upper(), dyn_loss_weights[ti]))
-          if self.pos_neg_weights:
+          if self.pos_neg_weights != None:
             print("pos_neg_weights: pos %f / neg %f" %(self.pos_neg_weights[0].item(), self.pos_neg_weights[1].item()))
 
         # --- Prediction and evaluation --------------------------
