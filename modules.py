@@ -30,6 +30,7 @@ class BinaryHingeLoss_with_mask(nn.Module):
     def __init__(self, margin: float = 1.0, margin_alpha: float = 1.0) -> None:
         super(BinaryHingeLoss_with_mask, self).__init__()
         self.margin = margin
+        self.margin_alpha = margin_alpha
 
     def forward(self, arc_scores: Tensor, target_arc_adja: Tensor, mask: Tensor, pos_neg_weights: Optional[Tensor] = None) -> Tensor:
         r"""
