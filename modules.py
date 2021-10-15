@@ -57,7 +57,8 @@ class BinaryHingeLoss_with_mask(nn.Module):
         s = self.margin + arc_scores
         if pos_neg_weights != None:
             # adding 1/norm of weights
-            loss += pos_neg_weights[1] * torch.sum( s * ((s > 0).int() * non_gov) ) + ( 1/torch.sum(pos_neg_weights**2))
+            # **3 we suppose the weights won't turn negative
+            loss += pos_neg_weights[1] * torch.sum( s * ((s > 0).int() * non_gov) ) + ( 1/torch.sum(pos_neg_weights**3))
         else:
             loss += torch.sum( s * ((s > 0).int() * non_gov) )
 
