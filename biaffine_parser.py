@@ -934,6 +934,7 @@ mlp_lab_o_size = 400
         # TODO: recode the tree mode
         """
         self.graph_mode = graph_mode
+        self.model_file = out_model_file
         self.lr = lr
         self.nb_epochs = nb_epochs
         self.lex_dropout = lex_dropout # proba of word / lemma / pos tag dropout
@@ -1196,10 +1197,10 @@ mlp_lab_o_size = 400
 
 
     def log_train_hyper(self, outstream):
-        for h in ['w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'mlp_lab_o_size', 'mlp_lab_dropout', 'aux_hidden_size', 'mtl_sharing_level', 'coeff_aux_task_as_input', 'coeff_aux_task_stack_propag', 'arc_loss_type', 'margin']:
+        for h in ['model_file', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'mlp_lab_o_size', 'mlp_lab_dropout', 'aux_hidden_size', 'mtl_sharing_level', 'coeff_aux_task_as_input', 'coeff_aux_task_stack_propag']:
           outstream.write("# %s : %s\n" %(h, str(self.__dict__[h])))
         outstream.write("\n")
-        for h in ['graph_mode', 'batch_size', 'beta1','beta2','lr','lex_dropout', 'freeze_bert']:
+        for h in ['graph_mode', 'batch_size', 'beta1','beta2','lr','lex_dropout', 'freeze_bert', 'arc_loss_type', 'margin', 'use_dyn_weights_pos_neg']:
           outstream.write("# %s : %s\n" %(h, str(self.__dict__[h])))
         for k in self.tasks:
           outstream.write("task %s\n" % k)          
