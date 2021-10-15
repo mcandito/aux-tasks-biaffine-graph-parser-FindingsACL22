@@ -27,7 +27,7 @@ class BinaryHingeLoss_with_mask(nn.Module):
     __constants__ = ['margin', 'reduction']
     margin: float
 
-    def __init__(self, margin: float = 1.0) -> None:
+    def __init__(self, margin: float = 1.0, margin_alpha: float = 1.0) -> None:
         super(BinaryHingeLoss_with_mask, self).__init__()
         self.margin = margin
 
@@ -48,19 +48,26 @@ class BinaryHingeLoss_with_mask(nn.Module):
         non_gov = (1 - target_arc_adja) * mask
 
         # gold arcs not reaching margin
-        s = self.margin - arc_scores
-        loss  = torch.sum( s * ((s > 0).int() * target_arc_adja) )
+        nge = self.margin - arc_scores # not good enough scores are those for which nge > 0
+        nge = ( nge * ((nge > 0).int() * target_arc_adja) )
+        # raise difference to a certain power margin_alpha
+        if self.margin_alpha != 1:
+            nge = nge**self.margin_alpha
+        loss  = torch.sum( nge )
         if pos_neg_weights != None:
             loss = loss * pos_neg_weights[0]
 
         # gold non arcs with score above -margin
-        s = self.margin + arc_scores
+        nge = self.margin + arc_scores # not low enough scores are those for which nge > 0
+        nge = ( nge * ((nge > 0).int() * non_gov) )
+        if self.margin_alpha != 1:
+            nge = nge**self.margin_alpha
         if pos_neg_weights != None:
             # adding 1/norm of weights
             # **3 we suppose the weights won't turn negative
-            loss += pos_neg_weights[1] * torch.sum( s * ((s > 0).int() * non_gov) ) + ( 1/torch.sum(pos_neg_weights**3))
+            loss += pos_neg_weights[1] * torch.sum( nge ) + ( 1/torch.sum(pos_neg_weights**3))
         else:
-            loss += torch.sum( s * ((s > 0).int() * non_gov) )
+            loss += torch.sum( nge )
 
         return loss
 

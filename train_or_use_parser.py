@@ -83,6 +83,7 @@ if __name__ == "__main__":
     argparser.add_argument('--study_scores', action="store_true", help='Pertains in test mode only. Is set, print study of arc scores.', default=False)
     argparser.add_argument('--arc_loss', choices=['bce', 'hinge'], help='Which loss to use for the arcs. Default = bce (for binary_cross_entropy)', default='bce')
     argparser.add_argument('--margin', help='Margin for hinge loss (cf. arc_loss). Default=1.0', type=float, default=1.0)
+    argparser.add_argument('--margin_alpha', help='Power for diff of margin for hinge loss (cf. arc_loss). Default=1.0', type=float, default=1.0)
     argparser.add_argument('--use_dyn_weights_pos_neg', action="store_true", help='If set, dynamic weights for pos and negative arc examples will be used.', default=False)
     
     args = argparser.parse_args()
