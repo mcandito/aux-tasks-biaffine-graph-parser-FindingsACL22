@@ -1124,7 +1124,7 @@ mlp_lab_o_size = 400
                   else:
                     goon_message = "Validation loss has decreased"
                     stop_message = "Validation loss has increased"
-                    if val_loss[-1] <= val_loss[-2]:
+                    if val_losses[-1] <= val_losses[-2]:
                         stop = False
                   if not stop:
                     for stream in [sys.stdout, log_stream]:
