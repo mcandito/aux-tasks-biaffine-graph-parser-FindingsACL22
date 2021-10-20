@@ -968,7 +968,7 @@ mlp_lab_o_size = 400
             self.arc_loss = BinaryHingeLoss_with_mask(min_margin=margin, margin_alpha=margin_alpha)
             self.arc_loss_type = 'hinge'
         else:
-            self.min_margin = None
+            self.min_margin = margin
             self.margin_alpha = margin_alpha
             self.arc_loss = BinaryHingeLoss_with_dyn_threshold_and_mask(min_margin=margin, margin_alpha=margin_alpha)
             self.arc_loss_type = 'dyn_hinge'
