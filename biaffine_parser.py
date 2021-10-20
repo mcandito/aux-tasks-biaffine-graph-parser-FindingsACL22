@@ -959,14 +959,19 @@ mlp_lab_o_size = 400
         # for graph mode arcs
         if arc_loss == 'bce':
             self.arc_loss = BCEWithLogitsLoss_with_mask(reduction='sum') # 'a'
-            self.margin = None
+            self.min_margin = None
             self.margin_alpha = None
             self.arc_loss_type = 'bce'
-        else:
-            self.margin = margin
-            self.margin_alpha = 2 # TODO set as hyper parameter
-            self.arc_loss = BinaryHingeLoss_with_mask(margin=margin, margin_alpha=margin_alpha)
+        elif arc_loss == 'hinge':
+            self.min_margin = margin
+            self.margin_alpha = margin_alpha
+            self.arc_loss = BinaryHingeLoss_with_mask(min_margin=margin, margin_alpha=margin_alpha)
             self.arc_loss_type = 'hinge'
+        else:
+            self.min_margin = None
+            self.margin_alpha = margin_alpha
+            self.arc_loss = BinaryHingeLoss_with_dyn_threshold_and_mask(min_margin=margin, margin_alpha=margin_alpha)
+            self.arc_loss_type = 'dyn_hinge'
         # for tree mode arcs (and tree mode labels??)
         #   (CrossEnt cf. softmax not applied yet in BiAffine output)
         #   ignoring padded dep tokens (i.e. whose head equals PAD_HEAD_RK)
@@ -1024,7 +1029,6 @@ mlp_lab_o_size = 400
                 
                 loss.backward()
                 optimizer.step() 
-                loss.detach()           
 
                 train_loss += loss.item()
                 train_nb_toks += nb_toks
@@ -1096,34 +1100,42 @@ mlp_lab_o_size = 400
                     torch.save(self, out_model_file)
                 # stopping to speed up hyperparameter tuning:
                 # if acc too low at epoch 5, give up
-                elif epoch == 5 and val_task2accs['l'][-1] < 60:
-                    for stream in [sys.stdout, log_stream]:
-                        stream.write("Validation L perf too low at epoch 5, give up training\n\n")
-                    self.log_best_perf(log_stream, 'val', epoch, val_task2accs)
+                #elif epoch == 5 and val_task2accs['l'][-1] < 60:
+                #    for stream in [sys.stdout, log_stream]:
+                #        stream.write("Validation L perf too low at epoch 5, give up training\n\n")
+                #    self.log_best_perf(log_stream, 'val', epoch, val_task2accs)
                         
                 # if validation loss has decreased: save model
-                # nb: when label loss comes into play, it might artificially increase the overall loss
-                #     => we don't early stop at this stage 
-                #elif (val_losses[-1] < val_losses[-2]) or (epoch == self.nb_epochs_arc_only) :
-                # early stopping if all the L* perfs have decreased
                 else:
                   stop = True
-                  for t in [ x for x in val_task2accs.keys() if x.startswith("l")]:
-                    if val_task2accs[t][-1] > val_task2accs[t][-2] :
-                      stop = False
-                      break
+                  # go on as long as any L* perf increases
+                  # early stopping iff all the L* perfs have decreased
+                  goon_message = "Validation L* perf has increased"
+                  stop_message = "Validation L* perf has decreased"
+                  if arc_loss != 'dyn_hinge':
+                    for t in [ x for x in val_task2accs.keys() if x.startswith("l")]:
+                      if val_task2accs[t][-1] > val_task2accs[t][-2] :
+                        stop = False
+                        break
+                  # in dyn_hinge loss, the L* perfs are not reliable in first epochs
+                  #        because direct prediction of nb heads not reliable in the beginning?
+                  # (because relying on H task)
+                  # => early stopping whe validation loss has increased
+                  else:
+                    goon_message = "Validation loss has decreased"
+                    stop_message = "Validation loss has increased"
+                    if val_loss[-1] <= val_loss[-2]:
+                        stop = False
                   if not stop:
                     for stream in [sys.stdout, log_stream]:
-                        #stream.write("Validation loss has decreased, saving model, current nb epochs = %d\n" % epoch)
-                        stream.write("Validation L* perf has increased, saving model, current nb epochs = %d\n" % epoch)
+                        stream.write(goon_message + ", saving model, current nb epochs = %d\n" % epoch)
                     torch.save(self, out_model_file)
                 # otherwise: early stopping, stop training, reload previous model
                 # NB: the model at last epoch was not saved yet
-                # => we can reload the model from the previous storage
+                # => we can just reload the model from the previous storage
                   else:
                     for stream in [sys.stdout, log_stream]:
-                        #stream.write("Validation loss has increased, reloading previous model, and stop training\n")
-                        stream.write("Validation L* perf has decreased, reloading previous model, and stop training\n")
+                        stream.write(stop_message + ", reloading previous model, and stop training\n")
                     self.log_best_perf(log_stream, 'val', epoch - 1, val_task2accs)
                     # reload (on the appropriate device)
                     # cf. https://pytorch.org/docs/stable/generated/torch.load.html#torch-load

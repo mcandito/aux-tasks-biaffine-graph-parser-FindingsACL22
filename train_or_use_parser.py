@@ -81,9 +81,9 @@ if __name__ == "__main__":
     argparser.add_argument('-t', '--trace', action="store_true", help='print some traces. Default=False', default=False)
     argparser.add_argument('--out_parsed_file', help='Pertains in test mode only. If set to non None, filename into which predictions will be dumped', default=None)
     argparser.add_argument('--study_scores', action="store_true", help='Pertains in test mode only. Is set, print study of arc scores.', default=False)
-    argparser.add_argument('--arc_loss', choices=['bce', 'hinge'], help='Which loss to use for the arcs. Default = bce (for binary_cross_entropy)', default='bce')
-    argparser.add_argument('--margin', help='Margin for hinge loss (cf. arc_loss). Default=1.0', type=float, default=1.0)
-    argparser.add_argument('--margin_alpha', help='Power for diff of margin for hinge loss (cf. arc_loss). Default=1.0', type=float, default=1.0)
+    argparser.add_argument('--arc_loss', choices=['bce', 'hinge', 'dyn_hinge'], help='Which loss to use for the arcs. Default = bce (for binary_cross_entropy). For dyn_hinge: at least one auxiliary task must predict the nb of arcs of each dependent.', default='bce')
+    argparser.add_argument('--margin', help='Minimum margin required for hinge losses (cf. arc_loss). Default=1.0', type=float, default=1.0)
+    argparser.add_argument('--margin_alpha', help='Power for difference to minimum margin for hinge losses (cf. arc_loss). Default=1.0', type=float, default=1.0)
     argparser.add_argument('--use_dyn_weights_pos_neg', action="store_true", help='If set, dynamic weights for pos and negative arc examples will be used.', default=False)
     
     args = argparser.parse_args()
@@ -162,6 +162,36 @@ if __name__ == "__main__":
           DEVICE = torch.device("cpu")
 
 
+        # -----  task definition ----------------------------
+        tasks = args.tasks.lower().split('.')
+        if sum([ int(t not in ['a','l','h','d','s','b','dpa']) for t in tasks ]) > 0:
+          exit("ERROR: tasks should be among a l h d s b")
+
+        if args.arc_loss == 'dyn_hinge' and sum([ int(t in ['h','b']) for t in tasks ]) == 0:
+          exit("ERROR: h or b task is required when using dyn_hinge loss")
+          
+        coeff_aux_task_as_input = {}
+        if args.coeff_aux_task_as_input != 'None':
+          c = args.coeff_aux_task_as_input
+          for x in c.strip().split('.'):
+            (t, v) = x.split(':')
+            v = int(v)
+            if t in tasks and t in ['s', 'h', 'b']:
+                coeff_aux_task_as_input[t] = v
+            else:
+                print("WARNING coeff_aux_task_as_input %s incoherent, skipping %s : %d " % (c, t, v))
+
+        coeff_aux_task_stack_propag = {}
+        if args.coeff_aux_task_stack_propag != 'None':
+          c = args.coeff_aux_task_stack_propag
+          for x in c.strip().split('.'):
+            (t, v) = x.split(':')
+            v = int(v)
+            if t in tasks:
+                coeff_aux_task_stack_propag[t] = v
+            else:
+                print("WARNING coeff_aux_task_stack_propag %s incoherent with tasks, skipping %s : %d " % (c, t, v))
+          
         # ------------- DATA (WITHOUT INDICES YET) ------------------------------
         print('loading sentences...')
         split_info_file = args.split_info_file
@@ -189,32 +219,6 @@ if __name__ == "__main__":
             w_emb_file = None
             use_pretrained_w_emb = False
 
-        # -----  task definition ----------------------------
-        tasks = args.tasks.lower().split('.')
-        if sum([ int(t not in ['a','l','h','d','s','b','dpa']) for t in tasks ]) > 0:
-          exit("ERROR: tasks should be among a l h d s b")
-        coeff_aux_task_as_input = {}
-        if args.coeff_aux_task_as_input != 'None':
-          c = args.coeff_aux_task_as_input
-          for x in c.strip().split('.'):
-            (t, v) = x.split(':')
-            v = int(v)
-            if t in tasks and t in ['s', 'h', 'b']:
-                coeff_aux_task_as_input[t] = v
-            else:
-                print("WARNING coeff_aux_task_as_input %s incoherent, skipping %s : %d " % (c, t, v))
-
-        coeff_aux_task_stack_propag = {}
-        if args.coeff_aux_task_stack_propag != 'None':
-          c = args.coeff_aux_task_stack_propag
-          for x in c.strip().split('.'):
-            (t, v) = x.split(':')
-            v = int(v)
-            if t in tasks:
-                coeff_aux_task_stack_propag[t] = v
-            else:
-                print("WARNING coeff_aux_task_stack_propag %s incoherent with tasks, skipping %s : %d " % (c, t, v))
-          
 
         # ------------- INDICES ------------------------------
         # indices are defined on train sentences only
@@ -265,6 +269,7 @@ if __name__ == "__main__":
                                    args.lex_dropout,
                                    arc_loss=args.arc_loss,
                                    margin=args.margin,
+                                   margin_alpha=args.margin_alpha,
                                    graph_mode = graph_mode)
                 
         # TODO: use this opt...

@@ -20,36 +20,36 @@ class BinaryHingeLoss_with_mask(nn.Module):
     """
     sum of binary Hinge loss on all over all the potential arcs
 
-    default margin = 1
+    min_margin is the minimum margin required to have a null loss (default = 1)
 
     see examples of losses in code https://pytorch.org/docs/stable/_modules/torch/nn/modules/loss.html
     """
-    __constants__ = ['margin', 'reduction']
-    margin: float
+    __constants__ = ['min_margin', 'reduction']
+    min_margin: float
 
-    def __init__(self, margin: float = 1.0, margin_alpha: float = 1.0) -> None:
+    def __init__(self, min_margin: float = 1.0, margin_alpha: float = 1.0) -> None:
         super(BinaryHingeLoss_with_mask, self).__init__()
-        self.margin = margin
+        self.min_margin = min_margin
         self.margin_alpha = margin_alpha
 
     def forward(self, arc_scores: Tensor, target_arc_adja: Tensor, mask: Tensor, pos_neg_weights: Optional[Tensor] = None) -> Tensor:
         r"""
         Sums the binary hinge loss over all the potential arcs:
         
-        sum over all gold arcs a, with score s_a : of max(0, margin - s_a)
+        sum over all gold arcs a, with score s_a : of max(0, min_margin - s_a)
         plus
-        sum over all gold non arcs a, with score s_a : of max(0, margin + s_a)
+        sum over all gold non arcs a, with score s_a : of max(0, min_margin + s_a)
         
-        Enforce that each gold arc gets a score > margin, 
-        and that each gold non arc gets a score < -margin
+        Enforce that each gold arc gets a score > min_margin, 
+        and that each gold non arc gets a score < -min_margin
 
         pos_neg_weights : vector of 2 weights, for positive and negative examples (gold arcs and gold non arcs)
         
         """
         non_gov = (1 - target_arc_adja) * mask
 
-        # gold arcs not reaching margin
-        nge = self.margin - arc_scores # not good enough scores are those for which nge > 0
+        # gold arcs not reaching min margin
+        nge = self.min_margin - arc_scores # not good enough scores are those for which nge > 0
         nge = ( nge * ((nge > 0).int() * target_arc_adja) )
         # raise difference to a certain power margin_alpha
         if self.margin_alpha != 1:
@@ -58,8 +58,8 @@ class BinaryHingeLoss_with_mask(nn.Module):
         if pos_neg_weights != None:
             loss = loss * pos_neg_weights[0]
 
-        # gold non arcs with score above -margin
-        nge = self.margin + arc_scores # not low enough scores are those for which nge > 0
+        # gold non arcs with score above -min_margin
+        nge = self.min_margin + arc_scores # not low enough scores are those for which nge > 0
         nge = ( nge * ((nge > 0).int() * non_gov) )
         if self.margin_alpha != 1:
             nge = nge**self.margin_alpha
@@ -72,6 +72,86 @@ class BinaryHingeLoss_with_mask(nn.Module):
 
         return loss
 
+class BinaryHingeLoss_with_dyn_threshold_and_mask(nn.Module):
+    """
+    Same as BinaryHingeLoss_with_mask but with "dynamic thresholds"
+        - s_maxnongov  = max score of gold non gov
+
+        - and s_mingov = min score of gold gov 
+
+    the threshold for gold arcs is not 0 + min_margin but s_maxnongov + min_margin
+    the threshold for gold non arcs is not 0 - min_margin but s_mingov - min_margin
+
+    min_margin is the minimum margin required to have a null loss (default = 1)
+
+    The loss enforces that each gold arc gets a score > s_maxnongov + min_margin, 
+                  and that each gold non arc gets a score < s_mingov - min_margin
+
+    see examples of losses in code https://pytorch.org/docs/stable/_modules/torch/nn/modules/loss.html
+    """
+    __constants__ = ['min_margin', 'reduction']
+    min_margin: float
+    margin_alpha: float
+    
+    def __init__(self, min_margin: float = 1.0, margin_alpha: float = 1.0) -> None:
+        super(BinaryHingeLoss_with_dyn_threshold_and_mask, self).__init__()
+        self.min_margin = min_margin
+        self.margin_alpha = margin_alpha
+
+    def forward(self, arc_scores: Tensor, target_arc_adja: Tensor, mask: Tensor, pos_neg_weights: Optional[Tensor] = None) -> Tensor:
+        r"""
+    
+        For a dependent j, let 
+
+        - s_maxnongov  = max score of gold non gov
+
+        - and s_mingov = min score of gold gov 
+
+        sum over all gold arcs a, with score s_a : of max(0, min_margin - (s_a - s_maxnongov))
+        plus
+        sum over all gold non arcs a, with score s_a : of max(0, min_margin - (s_mingov - s_a))
+        
+        Enforce that each gold arc gets a score > s_maxnongov + min_margin, 
+        and that each gold non arc gets a score < s_mingov - min_margin
+
+        pos_neg_weights : vector of 2 weights, for positive and negative examples (gold arcs and gold non arcs)
+        
+        """
+        non_gov = (1 - target_arc_adja) * mask
+
+        # detaching bounds from computation graph
+        # rm: detaching before cloning said to be slightly more efficient
+        s_maxnongov = (S_arc * non_gov).detach().clone().max(dim=1, keepdim=True)
+        s_mingov    = (S_arc * target_arc_adja).detach().clone().min(dim=1, keepdim=True)
+        
+        # gold arcs not reaching s_maxnongov + min_margin
+        # not good enough scores are those for which s - s_maxnongov < min_margin
+        #                                            0 < min_margin - (s - s_maxnongov)
+        nge = self.min_margin - (arc_scores - s_maxnongov) 
+        nge = ( nge * ((nge > 0).int() * target_arc_adja) )
+        # raise difference to a certain power margin_alpha
+        if self.margin_alpha != 1:
+            nge = nge**self.margin_alpha
+        loss  = torch.sum( nge )
+        if pos_neg_weights != None:
+            loss = loss * pos_neg_weights[0]
+
+        # gold non arcs with score above s_mingov - min_margin
+        # not low enough scores are those for which s_mingov - s < min_margin
+        #                                            0 < min_margin - (s_mingov - s)
+        nge = self.min_margin - (s_mingov - arc_scores) 
+        nge = ( nge * ((nge > 0).int() * non_gov) )
+        if self.margin_alpha != 1:
+            nge = nge**self.margin_alpha
+        if pos_neg_weights != None:
+            # adding 1/norm of weights
+            # **3 we suppose the weights won't turn negative
+            loss += pos_neg_weights[1] * torch.sum( nge ) + ( 1/torch.sum(pos_neg_weights**3))
+        else:
+            loss += torch.sum( nge )
+
+        return loss
+    
 
 class BCEWithLogitsLoss_with_mask(nn.BCEWithLogitsLoss):
     r""" Customized BCEWithLogitsLoss
