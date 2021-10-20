@@ -121,8 +121,8 @@ class BinaryHingeLoss_with_dyn_threshold_and_mask(nn.Module):
 
         # detaching bounds from computation graph
         # rm: detaching before cloning said to be slightly more efficient
-        s_maxnongov = (S_arc * non_gov).detach().clone().max(dim=1, keepdim=True)
-        s_mingov    = (S_arc * target_arc_adja).detach().clone().min(dim=1, keepdim=True)
+        s_maxnongov = (arc_scores * non_gov).detach().clone().max(dim=1, keepdim=True)
+        s_mingov    = (arc_scores * target_arc_adja).detach().clone().min(dim=1, keepdim=True)
         
         # gold arcs not reaching s_maxnongov + min_margin
         # not good enough scores are those for which s - s_maxnongov < min_margin
