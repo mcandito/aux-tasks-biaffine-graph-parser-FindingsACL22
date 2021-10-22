@@ -928,7 +928,7 @@ mlp_lab_o_size = 400
 
       return task2nbcorrect, pred_arcs, pred_labels, alt_pred_arcs, task2preds, score_study
 
-    def train_model(self, train_data, val_data, data_name, out_model_file, log_stream, nb_epochs, batch_size, lr, lex_dropout, arc_loss='bce', margin=1.0, margin_alpha=1.0, graph_mode=True):
+    def train_model(self, train_data, val_data, data_name, out_model_file, log_stream, nb_epochs, batch_size, lr, lex_dropout, early_stopping_style='L*acc', arc_loss='bce', margin=1.0, margin_alpha=1.0, graph_mode=True):
         """
         CAUTION: does not work in tree mode anymore
         # TODO: recode the tree mode
@@ -941,6 +941,7 @@ mlp_lab_o_size = 400
         self.batch_size = batch_size
         self.beta1 = 0.9
         self.beta2 = 0.9
+        self.early_stopping_style=early_stopping_style
         #optimizer = optim.SGD(biaffineparser.parameters(), lr=LR)
         #optimizer = optim.Adam(self.parameters(), lr=lr, betas=(0., 0.95), eps=1e-09)
         optimizer = optim.Adam(self.parameters(), lr=lr, betas=(self.beta1, self.beta2), eps=1e-09)
@@ -1089,7 +1090,6 @@ mlp_lab_o_size = 400
                     for t in val_task2loss:
                       val_task2loss[t] /= val_data.nb_words
                     
-
                     val_loss = val_loss/val_data.nb_words
                     val_losses.append(val_loss)
 
@@ -1098,29 +1098,28 @@ mlp_lab_o_size = 400
                 if epoch == 1:
                     print("saving model after first epoch\n")
                     torch.save(self, out_model_file)
-                # stopping to speed up hyperparameter tuning:
-                # if acc too low at epoch 5, give up
+                # stopping to speed up hyperparameter tuning: if acc too low at epoch 5, give up
                 #elif epoch == 5 and val_task2accs['l'][-1] < 60:
                 #    for stream in [sys.stdout, log_stream]:
                 #        stream.write("Validation L perf too low at epoch 5, give up training\n\n")
                 #    self.log_best_perf(log_stream, 'val', epoch, val_task2accs)
                         
-                # if validation loss has decreased: save model
+                # early stopping
                 else:
                   stop = True
-                  # go on as long as any L* perf increases
-                  # early stopping iff all the L* perfs have decreased
-                  goon_message = "Validation L* perf has increased"
-                  stop_message = "Validation L* perf has decreased"
-                  if arc_loss != 'dyn_hinge':
+                  if self.early_stopping_style=='Lacc':
+                    goon_message = "Validation L perf has increased"
+                    stop_message = "Validation L perf has decreased"
+                    if val_task2accs['l'][-1] > val_task2accs['l'][-2] :
+                        stop = False
+                  elif self.early_stopping_style == 'L*acc':
+                    # early stopping iff ALL the L* perfs have decreased
+                    goon_message = "Validation L* perf has increased"
+                    stop_message = "Validation L* perf has decreased"
                     for t in [ x for x in val_task2accs.keys() if x.startswith("l")]:
                       if val_task2accs[t][-1] > val_task2accs[t][-2] :
                         stop = False
                         break
-                  # in dyn_hinge loss, the L* perfs are not reliable in first epochs
-                  #        because direct prediction of nb heads not reliable in the beginning?
-                  # (because relying on H task)
-                  # => early stopping whe validation loss has increased
                   else:
                     goon_message = "Validation loss has decreased"
                     stop_message = "Validation loss has increased"
@@ -1130,9 +1129,7 @@ mlp_lab_o_size = 400
                     for stream in [sys.stdout, log_stream]:
                         stream.write(goon_message + ", saving model, current nb epochs = %d\n" % epoch)
                     torch.save(self, out_model_file)
-                # otherwise: early stopping, stop training, reload previous model
-                # NB: the model at last epoch was not saved yet
-                # => we can just reload the model from the previous storage
+                  # otherwise: early stopping, stop training, reload previous model
                   else:
                     for stream in [sys.stdout, log_stream]:
                         stream.write(stop_message + ", reloading previous model, and stop training\n")
@@ -1144,7 +1141,7 @@ mlp_lab_o_size = 400
                     break
                 
             scheduler.step()
-        # if no early stopping
+        # if loop on epochs was not stopped by early stopping
         else:
             for stream in [sys.stdout, log_stream]:
                 stream.write("Max nb epochs reached\n")
@@ -1194,7 +1191,7 @@ mlp_lab_o_size = 400
             self.log_values_suff = 'graph\t'
         else:
             self.log_values_suff = 'tree\t'
-        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg']
+        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style']
 
         featvals = [ str(self.__dict__[f]) for f in featnames ]
 
@@ -1214,7 +1211,7 @@ mlp_lab_o_size = 400
         for h in ['model_file', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'mlp_lab_o_size', 'mlp_lab_dropout', 'aux_hidden_size', 'mtl_sharing_level', 'coeff_aux_task_as_input', 'coeff_aux_task_stack_propag']:
           outstream.write("# %s : %s\n" %(h, str(self.__dict__[h])))
         outstream.write("\n")
-        for h in ['graph_mode', 'batch_size', 'beta1','beta2','lr','lex_dropout', 'freeze_bert', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg']:
+        for h in ['graph_mode', 'batch_size', 'beta1','beta2','lr','lex_dropout', 'freeze_bert', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style']:
           outstream.write("# %s : %s\n" %(h, str(self.__dict__[h])))
         for k in self.tasks:
           outstream.write("task %s\n" % k)          

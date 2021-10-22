@@ -66,7 +66,7 @@ if __name__ == "__main__":
     argparser.add_argument('-f', '--freeze_bert', action="store_true", help='Whether to freeze *bert parameters. Default=False', default=False)
     argparser.add_argument('--use_bias', action="store_true", help='Whether to add bias in all internal MLPs. Default=True', default=True)
     argparser.add_argument('-b', '--batch_size', help='batch size. Default=16', type=int, default=16)
-    argparser.add_argument('-e', '--early_stopping', action="store_true", help='if set, training will stop as soon as validation loss increases. Note that IN ANY CASE, THE SAVED MODEL will be that with MINIMUM LOSS on validation set, early stopping is just to use if training should be stopped at the first loss increase. Default=True', default=True)
+    argparser.add_argument('-e', '--early_stopping_style', choices=['L*acc','Lacc','loss'], help='Pertains if validation file is provided. Early stop using validation "loss", or all L accuracies ("L*acc"), or L accuracy ("Lacc"). Default=L*acc', default='L*acc')
 #    argparser.add_argument('-o', '--optimizer', help='The optimization algo (from pytorch optim module). Default=SGD', default='SGD')
     argparser.add_argument('-r', '--learning_rate', help='learning rate, default=0.1', type=float, default=0.00001)
     argparser.add_argument('-d', '--lex_dropout', help='lexical dropout rate, default=0.3', type=float, default=0.3)
@@ -169,6 +169,13 @@ if __name__ == "__main__":
 
         if args.arc_loss == 'dyn_hinge' and sum([ int(t in ['h','b']) for t in tasks ]) == 0:
           exit("ERROR: h or b task is required when using dyn_hinge loss")
+
+        # in dyn_hinge loss, the L* perfs are not reliable in first epochs
+        #        because direct prediction of nb heads not reliable in the beginning?
+        # (because relying on H task)
+        # => early stopping using loss
+        if args.arc_loss == 'dyn_hinge' and args.early_stopping_style != 'loss':
+          exit("ERROR: early stopping style should be 'loss' when using dyn_hinge loss")
           
         coeff_aux_task_as_input = {}
         if args.coeff_aux_task_as_input != 'None':
@@ -267,6 +274,7 @@ if __name__ == "__main__":
                                    args.batch_size,
                                    args.learning_rate,
                                    args.lex_dropout,
+                                   early_stopping_style=args.early_stopping_style,
                                    arc_loss=args.arc_loss,
                                    margin=args.margin,
                                    margin_alpha=args.margin_alpha,
