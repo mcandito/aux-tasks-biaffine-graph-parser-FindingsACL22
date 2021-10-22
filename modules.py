@@ -87,6 +87,10 @@ class BinaryHingeLoss_with_dyn_threshold_and_mask(nn.Module):
     The loss enforces that each gold arc gets a score > s_maxnongov + min_margin, 
                   and that each gold non arc gets a score < s_mingov - min_margin
 
+    Can be viewed as multiclass multilabel online updates of the MMP algo by Crammer and Singer 2003
+    if the governors of a dependent j are viewed as labels
+
+
     see examples of losses in code https://pytorch.org/docs/stable/_modules/torch/nn/modules/loss.html
     """
     __constants__ = ['min_margin', 'reduction']
