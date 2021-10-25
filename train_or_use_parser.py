@@ -298,6 +298,6 @@ if __name__ == "__main__":
           'lr':args.learning_rate,
           'lex_dropout':args.lex_dropout,
           'nb_epochs':args.nb_epochs,
-          'early_stopping':args.early_stopping,
+          'early_stopping_style':args.early_stopping_style,
         }
 
