@@ -53,6 +53,7 @@ if __name__ == "__main__":
     argparser.add_argument('--data_name', help='short name of data: ftb or sequoia etc... Default=ftb', default='ftb')
     argparser.add_argument('-g', '--data_format', choices=['tree', 'sdp', 'deep'], help='type of input and format: "tree"= conllu dependency trees, "deep"=conllu compact dependency graphs (pipe-separated governors), "sdp" = sdp 2015 dependency graphs. Default=deep', default='deep')
     argparser.add_argument('-p', '--w_emb_file', help='If not "None", pre-trained word embeddings file. NB: first line should contain nbwords embedding size', default='None')
+    argparser.add_argument('--l_emb_file', help='If not "None", pre-trained lemma embeddings file. NB: first line should contain nbwords embedding size', default='None')
     argparser.add_argument('-w', '--w_emb_size', help='size of word embeddings. Default=100', type=int, default=100)
     argparser.add_argument('-l', '--l_emb_size', help='size of lemma embeddings. Default=100', type=int, default=100)
     argparser.add_argument('-c', '--p_emb_size', help='size of POS embeddings. Default=20', type=int, default=20)
@@ -226,11 +227,18 @@ if __name__ == "__main__":
             w_emb_file = None
             use_pretrained_w_emb = False
 
+        if args.l_emb_file != 'None':
+            l_emb_file = args.l_emb_file
+            use_pretrained_l_emb = True
+        else:
+            l_emb_file = None
+            use_pretrained_l_emb = False
+          
 
         # ------------- INDICES ------------------------------
         # indices are defined on train sentences only
         print('indices...')
-        indices = Indices(sentences['train'], w_emb_file=w_emb_file, bert_tokenizer=bert_tokenizer)
+        indices = Indices(sentences['train'], w_emb_file=w_emb_file, l_emb_file=l_emb_file, bert_tokenizer=bert_tokenizer)
 
         # ------------- INDEXED DATA -------------------------
         print('indexing data...')
@@ -252,6 +260,7 @@ if __name__ == "__main__":
                                         mlp_lab_o_size=args.mlp_lab_o_size,
                                         aux_hidden_size=args.aux_hidden_size,
                                         use_pretrained_w_emb=use_pretrained_w_emb, 
+                                        use_pretrained_l_emb=use_pretrained_l_emb,
                                         use_bias=args.use_bias,
                                         bert_name=args.bert_name,
                                         reduced_bert_size=args.reduced_bert_size,

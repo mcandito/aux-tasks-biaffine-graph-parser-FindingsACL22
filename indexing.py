@@ -11,7 +11,7 @@ from collections import defaultdict
 
 class Indices:
    
-    def __init__(self, known_sentences, w_emb_file=None, bert_tokenizer=None):
+    def __init__(self, known_sentences, w_emb_file=None, l_emb_file=None, bert_tokenizer=None):
         """
         Input:
         known_sentences : list of sentences, 
@@ -40,18 +40,33 @@ class Indices:
         
         self.bert_tokenizer = bert_tokenizer
 
+        self.emb_size = {} # vocab type to size
+        self.i2emb = {}    # key = vocab type, value = list from id to string
+        self.emb_matrix = {} # key = vocab type, value = the loaded/random embedding tensor
+
+        # indices for the various vocabularies of symbols
+        
         if w_emb_file is not None:
             # add indices for special symbols only: calling index_new_vocab with an empty sequence of tokens
             self.index_new_vocab('w', [], add_pad=True, add_unk=True)
             # and then for known embeddings + additional known forms
-            self.load_embeddings_from_scratch(w_emb_file, additional_forms=set(forms))
+            self.load_embeddings_from_scratch('w', w_emb_file, additional_forms=set(forms))
         else:
             self.index_new_vocab('w', forms, add_pad=True, add_unk=True)
-            self.iw2emb = None
-            self.w_emb_size = 0
+            self.i2emb['w'] = None
+            self.emb_size['w'] = 0
 
-        # indices for the various vocabularies of symbols
-        self.index_new_vocab('l', lemmas, add_pad=True, add_unk=True)
+
+        if l_emb_file is not None:
+            # add indices for special symbols only: calling index_new_vocab with an empty sequence of tokens
+            self.index_new_vocab('l', [], add_pad=True, add_unk=True)
+            # and then for known embeddings + additional known forms
+            self.load_embeddings_from_scratch('l', l_emb_file, additional_forms=set(lemmas))
+        else:
+            self.index_new_vocab('l', lemmas, add_pad=True, add_unk=True)
+            self.i2emb['l'] = None
+            self.emb_size['l'] = 0
+        
         self.index_new_vocab('p', tags, add_pad=True, add_unk=True)
         # heads are already integers (ranks in sequence), padded dep tokens will get -1 as head
         # NB: important to define the true label ids distinct from the padding label id (==0)
@@ -217,65 +232,66 @@ class Indices:
       """
       return [ [ self.lex_dropout_itok(itok, dropout_rate) for itok in sent ] for sent in isentences ]
      
-    def load_embeddings_from_scratch(self, embeddings_file, additional_forms=None):
+    def load_embeddings_from_scratch(self, vocab, embeddings_file, additional_forms=None):
         """
         Loads txt file containing lexical (non-contextual) embeddings 
         @param embeddings_file: vectors associated to words (or strings)
         First line contains : nb_words w_emb_size
         
-        - fills self.iw2emb list frow word id to its pretrained embedding
-        - sets self.w_emb_size
+        - fills self.i2emb[vocab] list from id to its pretrained embedding
+        - sets self.emb_size[vocab]
     
         """
         instream = open(embeddings_file)
-        iw2emb = []
+        i2emb = []
         # reading nb_words and w embedding size from first line
         line = instream.readline()
         line = line[:-1]
-        (nb_words, w_emb_size) = [ int(x) for x in line.split(' ') ]
-        self.w_emb_size = w_emb_size
-        self.iw2emb = []
+        (nb_words, emb_size) = [ int(x) for x in line.split(' ') ]
+        self.emb_size[vocab] = emb_size
+        self.i2emb = []
         
         # NB: when calling load_embeddings_from_scratch,
         # the indices contain the special symbols only, if any (*PAD*, *UNK*, *DROP*)
-        for s in self.vocabs['w']['i2s']:
+        for s in self.vocabs[vocab]['i2s']:
             if s == UNK_SYMB or s == DROP_SYMB:
                 # random vector for unk token and for drop token(between a=-1 and b=1 : (b-a)*sample + a)
                 # rem: apparently for drop token, more stable to learn from a random vector than from a null vec
-                self.iw2emb.append( 2 * np.random.random(self.w_emb_size) - 1 )
+                self.i2emb[vocab].append( 2 * np.random.random(emb_size) - 1 )
             elif s == PAD_SYMB:
                 # null vector for pad token
-                self.iw2emb.append(np.zeros(self.w_emb_size))
+                self.i2emb[vocab].append(np.zeros(self.emb_size[vocab]))
         
         line = instream.readline()
-        i = len(self.vocabs['w']['i2s']) - 1
+        i = len(self.vocabs[vocab]['i2s']) - 1
         while line:
             i += 1
             line = line[:-1].strip() # trailing space
             cols = line.split(" ")
             w = cols[0]
             vect = [float(x) for x in cols[1:]]
-            self.vocabs['w']['s2i'][w] = i
-            self.vocabs['w']['i2s'].append(w)
-            self.iw2emb.append(vect)
+            self.vocabs[vocab]['s2i'][w] = i
+            self.vocabs[vocab]['i2s'].append(w)
+            self.i2emb[vocab].append(vect)
             
             line = instream.readline()
 
         # if additional sentences were provided
         if additional_forms:
             # get the forms that have no pretrained embedding
-            additional_forms = list(additional_forms.difference(self.vocabs['w']['s2i'].keys()))
-            last = len(self.vocabs['w']['i2s']) # current size of vocab
-            emb_size = len(self.iw2emb[-1])
-            self.vocabs['w']['i2s'] += additional_forms
+            additional_forms = list(additional_forms.difference(self.vocabs[vocab]['s2i'].keys()))
+            last = len(self.vocabs[vocab]['i2s']) # current size of vocab
+            # already defined
+            #emb_size = len(self.i2emb[vocab][-1])
+            self.vocabs[vocab]['i2s'] += additional_forms
             for i, form in enumerate(additional_forms):
-                self.vocabs['w']['s2i'][form] = last + i
-                # random vector between -1 and 1  (b-a)*sample -a
-                self.iw2emb.append( 2 * np.random.random(emb_size) - 1 )
+                self.vocabs[vocab]['s2i'][form] = last + i
+                # random vector between -1 and 1  (b-a)*sample + a
+                self.i2emb[vocab].append( 2 * np.random.random(emb_size) - 1 )
 
             
-        self.w_emb_matrix = torch.tensor(self.iw2emb).float()
-        print("Pretrained word embeddings shape:", self.w_emb_matrix.shape)
+        self.emb_matrix[vocab] = torch.tensor(self.i2emb[vocab]).float()
+        print("Pretrained %s embeddings shape: %s" % (vocab, str(self.emb_matrix[vocab].shape)))
         
         
     # *BERT tokenization (subwords) and correspondance between 

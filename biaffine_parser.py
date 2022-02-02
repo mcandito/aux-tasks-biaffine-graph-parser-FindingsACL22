@@ -59,10 +59,11 @@ mlp_lab_o_size = 400
     # "we drop word and tag embeddings inde- pendently with 33% probability
     # When only one is dropped, we scale the other by a factor of two"
     def __init__(self, indices, device, tasks,  # task list (letters a, l, h, d, b, s)
-                 w_emb_size=10, #125
+                 w_emb_size=100, #125
                  l_emb_size=None, 
                  p_emb_size=None, # 100
                  use_pretrained_w_emb=False,
+                 use_pretrained_l_emb=False,
                  lstm_dropout=0.33, 
                  lstm_h_size=20, # 600
                  lstm_num_layers=3, 
@@ -87,6 +88,7 @@ mlp_lab_o_size = 400
         self.indices = indices
         self.device = device
         self.use_pretrained_w_emb = use_pretrained_w_emb
+        self.use_pretrained_l_emb = use_pretrained_l_emb
         # coefficients to multiply output from aux task to serve as input for a / l tasks
         self.coeff_aux_task_as_input = coeff_aux_task_as_input
         # other way to add output from aux tasks as input for a/l tasks : hidden layers ("stack propagation")
@@ -130,8 +132,6 @@ mlp_lab_o_size = 400
             self.pos_neg_weights = None
 
         # ------------ Encoding of sequences ------------------------------
-        self.lexical_emb_size = w_emb_size
-        w_vocab_size = indices.get_vocab_size('w')
 
         self.num_labels = indices.get_vocab_size('label')
         self.w_emb_size = w_emb_size
@@ -147,13 +147,16 @@ mlp_lab_o_size = 400
         self.aux_hidden_size = aux_hidden_size
 
         self.use_bias = use_bias # whether to add bias in all biaffine transformations
-    
+
+        self.lexical_emb_size = w_emb_size
+        
         # -------------------------
         # word form embedding layer
+        w_vocab_size = indices.get_vocab_size('w')
         if not use_pretrained_w_emb:
             self.w_embs = nn.Embedding(w_vocab_size, w_emb_size).to(self.device)
         else:
-            matrix = indices.w_emb_matrix
+            matrix = indices.emb_matrix['w']
             
             #if w_emb_size != matrix.shape[1]:
             #    sys.stderr.write("Error, pretrained embeddings are of size %d whereas %d is expected"
@@ -161,8 +164,8 @@ mlp_lab_o_size = 400
             if w_vocab_size != matrix.shape[0]:
                 sys.stderr.write("Error, pretrained embeddings have a %d vocab size while indices have %d" % (matrix.shape[0], w_vocab_size))
             self.w_embs = nn.Embedding.from_pretrained(matrix, freeze = False).to(self.device)
-            # linear transformation of the pre-trained embeddings (dozat 2018)
-            self.w_emb_linear_reduction = nn.Linear(matrix.shape[1],w_emb_size).to(self.device)
+            #@@ linear transformation of the pre-trained embeddings (dozat 2018)
+            #@@ self.w_emb_linear_reduction = nn.Linear(matrix.shape[1],w_emb_size).to(self.device)
             print("w_embs done")
         # -------------------------
         # pos tag embedding layer
@@ -179,7 +182,13 @@ mlp_lab_o_size = 400
         if l_emb_size:
             l_vocab_size = indices.get_vocab_size('l')
             self.lexical_emb_size += l_emb_size
-            self.l_embs = nn.Embedding(l_vocab_size, l_emb_size).to(self.device)
+            if not use_pretrained_l_emb:
+                self.l_embs = nn.Embedding(l_vocab_size, l_emb_size).to(self.device)
+            else:
+                matrix = indices.emb_matrix['l']
+                if l_vocab_size != matrix.shape[0]:
+                    sys.stderr.write("Error, pretrained embeddings have a %d vocab size while indices have %d" % (matrix.shape[0], l_vocab_size))
+                self.l_embs = nn.Embedding.from_pretrained(matrix, freeze = False).to(self.device)
         else:
             self.l_embs = None
 
@@ -323,8 +332,8 @@ mlp_lab_o_size = 400
                                  (for packing in lstm)
         """
         w_embs = self.w_embs(w_id_seqs)
-        if self.use_pretrained_w_emb:
-            w_embs = self.w_emb_linear_reduction(w_embs)
+        #@@if self.use_pretrained_w_emb:
+        #@@    w_embs = self.w_emb_linear_reduction(w_embs)
             
         if self.p_embs:
             p_embs = self.p_embs(p_id_seqs)
