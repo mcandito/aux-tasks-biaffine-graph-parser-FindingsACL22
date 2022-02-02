@@ -243,13 +243,12 @@ class Indices:
     
         """
         instream = open(embeddings_file)
-        i2emb = []
         # reading nb_words and w embedding size from first line
         line = instream.readline()
         line = line[:-1]
         (nb_words, emb_size) = [ int(x) for x in line.split(' ') ]
         self.emb_size[vocab] = emb_size
-        self.i2emb = []
+        self.i2emb[vocab] = []
         
         # NB: when calling load_embeddings_from_scratch,
         # the indices contain the special symbols only, if any (*PAD*, *UNK*, *DROP*)
