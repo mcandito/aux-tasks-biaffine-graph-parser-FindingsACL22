@@ -107,6 +107,10 @@ if __name__ == "__main__":
         DEVICE = parser.device
         sys.stderr.write("loaded model %s\n" % (model_file))
         indices = parser.indices
+        # backward compatibility
+        if 'bert_subword_strategy' not in indices.__dict__:
+          indices.bert_subword_strategy = 'first'
+          parser.bert_subword_strategy = 'first'
         if args.data_format in ['deep', 'sdp']:
             if args.data_format == 'deep':
               sentences = load_dep_graphs(args.conll_file, corpus_type='toparse')
