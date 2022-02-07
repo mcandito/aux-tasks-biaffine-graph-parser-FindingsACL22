@@ -1201,7 +1201,7 @@ mlp_lab_o_size = 400
             self.log_values_suff = 'graph\t'
         else:
             self.log_values_suff = 'tree\t'
-        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style', 'bert_subword_strategy']
+        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style', 'mlp_lab_o_size', 'mlp_lab_dropout', 'bert_subword_strategy']
 
         featvals = [ str(self.__dict__[f]) for f in featnames ]
 
