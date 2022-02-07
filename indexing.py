@@ -11,7 +11,7 @@ from collections import defaultdict
 
 class Indices:
    
-    def __init__(self, known_sentences, w_emb_file=None, l_emb_file=None, bert_tokenizer=None):
+    def __init__(self, known_sentences, w_emb_file=None, l_emb_file=None, bert_tokenizer=None, bert_subword_strategy='first'):
         """
         Input:
         known_sentences : list of sentences, 
@@ -39,6 +39,7 @@ class Indices:
           add_slabseqs = True
         
         self.bert_tokenizer = bert_tokenizer
+        self.bert_subword_strategy = bert_subword_strategy
 
         self.emb_size = {} # vocab type to size
         self.i2emb = {}    # key = vocab type, value = list from id to string
@@ -305,7 +306,8 @@ class Indices:
             - list of list : for each sent s, 
                                  for each word-token w : 
                                     rank, in the *BERT tokenization of s,
-                                    of the first bert-token of w
+                                    of the first or last bert-token of w
+                             (depending on self.bert_subword_strategy)
                                     
         """
         # pour chaque mot dans sentence, tokenisé en t1 t2 ... tn, 
@@ -314,6 +316,7 @@ class Indices:
     
         tid_seqs = []
         first_tok_rankss = []
+        last_tok_rankss = [] # ranks of last tokens of words
 
         tkz = self.bert_tokenizer
 
@@ -326,6 +329,7 @@ class Indices:
             (forms, lemmas, tags, heads, labels, _) = list(zip(*sent))
             tid_seq = [ bos_token_id ]
             first_tok_ranks = [ 0 ] # rank of bos # will be used for bert embedding of <root> token
+            last_tok_ranks = [ 0 ]  # rank of bos
             start = 1
             # removing <root> token
             forms = forms[1:]
@@ -334,6 +338,7 @@ class Indices:
               tid_word = tkz.encode(word, add_special_tokens=False)
               end = start + len(tid_word) - 1 
               first_tok_ranks.append(start)
+              last_tok_ranks.append(end)
               tid_seq.extend(tid_word)
               start = end + 1
             # end of sentence symbol
@@ -341,9 +346,13 @@ class Indices:
             # first_tok_ranks.append(start)
 
             first_tok_rankss.append(first_tok_ranks)
+            last_tok_rankss.append(last_tok_ranks)
             tid_seqs.append(tid_seq)
-        
-        return tid_seqs, first_tok_rankss
+
+        if self.bert_subword_strategy == 'first':
+            return tid_seqs, first_tok_rankss
+        else:
+            return tid_seqs, last_tok_rankss
 
 """## Test of loading / encoding trees into indices"""
 

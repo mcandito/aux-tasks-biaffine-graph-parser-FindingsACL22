@@ -64,6 +64,7 @@ if __name__ == "__main__":
     argparser.add_argument('--mlp_lab_o_size', help='size of lab mlp after lstm. Default=300', type=int, default=300)
     argparser.add_argument('--aux_hidden_size', help='size of hidden layers of aux tasks. Default=300', type=int, default=300)
     argparser.add_argument('--bert_name', help='huggingface *bert model name. If not "None", will be used as pretrained-LM. Default:flaubert/flaubert_base_cased', default="flaubert/flaubert_base_cased")
+    argparser.add_argument('--bert_subword_strategy', choices=['first', 'last'], help='Which bert subword of a word should be used. Either the first or last subword embeddings will be used. Default=first. (In test mode: will be overriden by stored indices.bert_subword_strategy)', default="first")
     argparser.add_argument('-f', '--freeze_bert', action="store_true", help='Whether to freeze *bert parameters. Default=False', default=False)
     argparser.add_argument('--use_bias', action="store_true", help='Whether to add bias in all internal MLPs. Default=True', default=True)
     argparser.add_argument('-b', '--batch_size', help='batch size. Default=16', type=int, default=16)
@@ -238,7 +239,7 @@ if __name__ == "__main__":
         # ------------- INDICES ------------------------------
         # indices are defined on train sentences only
         print('indices...')
-        indices = Indices(sentences['train'], w_emb_file=w_emb_file, l_emb_file=l_emb_file, bert_tokenizer=bert_tokenizer)
+        indices = Indices(sentences['train'], w_emb_file=w_emb_file, l_emb_file=l_emb_file, bert_tokenizer=bert_tokenizer, bert_subword_strategy=args.bert_subword_strategy)
 
         # ------------- INDEXED DATA -------------------------
         print('indexing data...')
