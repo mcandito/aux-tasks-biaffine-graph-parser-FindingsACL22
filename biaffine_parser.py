@@ -104,6 +104,7 @@ mlp_lab_o_size = 400
             bert_model = AutoModel.from_pretrained(bert_name,return_dict=True)
         self.bert_subword_strategy = indices.bert_subword_strategy
 
+        self.debug_lsig2 = 'y' # to log the debug
 
         # indices for tasks
         self.tasks = sorted(tasks)
@@ -537,7 +538,7 @@ mlp_lab_o_size = 400
           arc_loss = self.arc_loss(S_arc, arc_adja, pad_masks, self.pos_neg_weights)
           ti = self.task2i['a']
           task2loss['a'] = arc_loss.item()
-          loss +=  (dyn_loss_weights[ti] * arc_loss) + self.log_sigma2[ti]
+          loss +=  (dyn_loss_weights[ti] * arc_loss) + self.log_sigma2[ti]/2
 
         if 'l' in self.task2i:
           # --- Label loss -------------------------
@@ -556,13 +557,13 @@ mlp_lab_o_size = 400
           lab_loss = self.ce_loss(s_labels, g_labels) 
           ti = self.task2i['l']
           task2loss['l'] = lab_loss.item()
-          loss +=  (dyn_loss_weights[ti] * lab_loss) + self.log_sigma2[ti]
+          loss +=  (dyn_loss_weights[ti] * lab_loss) + self.log_sigma2[ti]/2
         
         if 'dpa' in self.task2i:
           dpa_arc_loss = self.arc_loss(S_dpa_arc, arc_adja, pad_masks, self.pos_neg_weights)
           ti = self.task2i['dpa']
           task2loss['dpa'] = dpa_arc_loss.item()
-          loss +=  (dyn_loss_weights[ti] * dpa_arc_loss) + self.log_sigma2[ti]
+          loss +=  (dyn_loss_weights[ti] * dpa_arc_loss) + self.log_sigma2[ti]/2
             
         # auxiliary tasks
         if 'h' in self.task2i:
@@ -571,7 +572,7 @@ mlp_lab_o_size = 400
           loss_h = self.mse_loss_with_mask(log_pred_nbheads, log_gold_nbheads, linear_pad_mask)
           task2loss['h'] = loss_h.item()
           ti = self.task2i['h']
-          loss +=  (dyn_loss_weights[ti] * loss_h) + self.log_sigma2[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_h) + self.log_sigma2[ti]/2
         else:
           gold_nbheads = None
 
@@ -600,7 +601,7 @@ mlp_lab_o_size = 400
 
           task2loss['scorearcnbh'] = loss_scorearcnbh.item()
           ti = self.task2i['scorearcnbh']
-          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbh) + self.log_sigma2[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbh) + self.log_sigma2[ti]/2
         else:
           S_arc_sigmoid_gold_arcs = None
 
@@ -610,7 +611,7 @@ mlp_lab_o_size = 400
           loss_d = self.mse_loss_with_mask(log_pred_nbdeps, log_gold_nbdeps, linear_pad_mask)
           task2loss['d'] = loss_d.item()
           ti = self.task2i['d']
-          loss +=  (dyn_loss_weights[ti] * loss_d) + self.log_sigma2[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_d) + self.log_sigma2[ti]/2
         else:
           gold_nbdeps = None
 
@@ -637,7 +638,7 @@ mlp_lab_o_size = 400
             
           task2loss['scorearcnbd'] = loss_scorearcnbd.item()
           ti = self.task2i['scorearcnbd']
-          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbd) + self.log_sigma2[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbd) + self.log_sigma2[ti]/2
           
 #        # predicted global balance in each sentence, between the predicted nbheads and the predicted nbdeps
 #        # which should be 0
@@ -649,7 +650,7 @@ mlp_lab_o_size = 400
 #          loss_global = (nb_toks / batch_size) * self.mse_loss(pred_h_d_per_sentence, gold_h_d_per_sentence)
 #          task2loss['g'] = loss_global.item()
 #          ti = self.task2i['g']
-#          loss +=  (dyn_loss_weights[ti] * loss_global) + self.log_sigma2[ti]
+#          loss +=  (dyn_loss_weights[ti] * loss_global) + self.log_sigma2[ti]/2
 
         if 'b' in self.task2i:
           # unfortunately, bincount on 1-d tensors only 
@@ -663,14 +664,14 @@ mlp_lab_o_size = 400
                                       torch.flatten(linear_pad_mask, start_dim=0, end_dim=1))
           task2loss['b'] = loss_bol.item()
           ti = self.task2i['b']
-          loss +=  (dyn_loss_weights[ti] * loss_bol) + self.log_sigma2[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_bol) + self.log_sigma2[ti]/2
 
         if 's' in self.task2i:
           loss_slabseq = self.ce_loss(torch.flatten(scores_slabseqs, start_dim=0, end_dim=1),
                                       torch.flatten(slabseqs, start_dim=0, end_dim=1))
           task2loss['s'] = loss_slabseq.item()
           ti = self.task2i['s']
-          loss +=  (dyn_loss_weights[ti] * loss_slabseq) + self.log_sigma2[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_slabseq) + self.log_sigma2[ti]/2
 
         if trace_first:
           for ti, task in enumerate(self.tasks):
@@ -1201,7 +1202,7 @@ mlp_lab_o_size = 400
             self.log_values_suff = 'graph\t'
         else:
             self.log_values_suff = 'tree\t'
-        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style', 'mlp_lab_o_size', 'mlp_lab_dropout', 'bert_subword_strategy']
+        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style', 'mlp_lab_o_size', 'mlp_lab_dropout', 'bert_subword_strategy','debug_lsig2']
 
         featvals = [ str(self.__dict__[f]) for f in featnames ]
 
@@ -1222,7 +1223,7 @@ mlp_lab_o_size = 400
         for h in ['model_file', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'bert_subword_strategy', 'reduced_bert_size', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'mlp_lab_o_size', 'mlp_lab_dropout', 'aux_hidden_size', 'mtl_sharing_level', 'coeff_aux_task_as_input', 'coeff_aux_task_stack_propag']:
           outstream.write("# %s : %s\n" %(h, str(self.__dict__[h])))
         outstream.write("\n")
-        for h in ['graph_mode', 'batch_size', 'beta1','beta2','lr','lex_dropout', 'freeze_bert', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style']:
+        for h in ['graph_mode', 'batch_size', 'beta1','beta2','lr','lex_dropout', 'freeze_bert', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style', 'debug_lsig2']:
           outstream.write("# %s : %s\n" %(h, str(self.__dict__[h])))
         for k in self.tasks:
           outstream.write("task %s\n" % k)          
