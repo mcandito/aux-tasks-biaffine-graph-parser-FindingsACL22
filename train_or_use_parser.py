@@ -87,7 +87,7 @@ if __name__ == "__main__":
     argparser.add_argument('--margin', help='Minimum margin required for hinge losses (cf. arc_loss). Default=1.0', type=float, default=1.0)
     argparser.add_argument('--margin_alpha', help='Power for difference to minimum margin for hinge losses (cf. arc_loss). Default=1.0', type=float, default=1.0)
     argparser.add_argument('--use_dyn_weights_pos_neg', action="store_true", help='If set, dynamic weights for pos and negative arc examples will be used.', default=False)
-    argparser.add_argument('--sigma_power', help='Power for sigma in task weighting (the higher, the bigger impact for task weighting). Default=2.0', type=float, default=2.0)
+    argparser.add_argument('--sigma_power', help='Power for sigma in task weighting (the higher, the bigger impact for task weighting). Use negative value to disable task weighting alltogether. Default=2.0', type=float, default=2.0)
     
     
     args = argparser.parse_args()
