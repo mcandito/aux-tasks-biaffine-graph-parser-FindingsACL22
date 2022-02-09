@@ -87,6 +87,8 @@ if __name__ == "__main__":
     argparser.add_argument('--margin', help='Minimum margin required for hinge losses (cf. arc_loss). Default=1.0', type=float, default=1.0)
     argparser.add_argument('--margin_alpha', help='Power for difference to minimum margin for hinge losses (cf. arc_loss). Default=1.0', type=float, default=1.0)
     argparser.add_argument('--use_dyn_weights_pos_neg', action="store_true", help='If set, dynamic weights for pos and negative arc examples will be used.', default=False)
+    argparser.add_argument('--sigma_power', help='Power for sigma in task weighting (the higher, the bigger impact for task weighting). Default=2.0', type=float, default=2.0)
+    
     
     args = argparser.parse_args()
 
@@ -270,6 +272,7 @@ if __name__ == "__main__":
                                         bert_name=args.bert_name,
                                         reduced_bert_size=args.reduced_bert_size,
                                         freeze_bert=args.freeze_bert,
+                                        sigma_power=args.sigma_power,
                                         mtl_sharing_level=args.mtl_sharing_level,
                                         coeff_aux_task_as_input=coeff_aux_task_as_input,
                                         coeff_aux_task_stack_propag=coeff_aux_task_stack_propag,
