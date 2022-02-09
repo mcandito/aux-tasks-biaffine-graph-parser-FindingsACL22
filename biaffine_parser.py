@@ -76,6 +76,7 @@ mlp_lab_o_size = 400
                  bert_name=None,   # caution: should match with indices.bert_tokenizer
                  reduced_bert_size=0,
                  freeze_bert=False,
+                 sigma_power=2, # power for task weighting
                  mtl_sharing_level=1, # levels of parameter sharing in mtl 1: bert+lstm only, 2: best+lstm+mlp
                  # output of aux task used as input features for tasks A / L
                  coeff_aux_task_as_input={}, # {'s':5, 'h':20},
@@ -104,7 +105,7 @@ mlp_lab_o_size = 400
             bert_model = AutoModel.from_pretrained(bert_name,return_dict=True)
         self.bert_subword_strategy = indices.bert_subword_strategy
 
-        self.sigma_power = 1 # (1/sigma**sigma_power)*loss + sigma (no log anymore)
+        self.sigma_power = sigma_power # (1/sigma**sigma_power)*loss + log(sigma)/sigma_power
 
         # indices for tasks
         self.tasks = sorted(tasks)
@@ -122,7 +123,7 @@ mlp_lab_o_size = 400
         # Kendal et al. 2018 https://openaccess.thecvf.com/content_cvpr_2018/papers/Kendall_Multi-Task_Learning_Using_CVPR_2018_paper.pdf
         # log of variance set to zero (<=> variance == 1)
         # (important to put the tensor on the right device BEFORE instantiating a nn.Parameter)
-        self.sigma = nn.Parameter(torch.zeros(self.nb_tasks).to(device))
+        self.log_sigma_power = nn.Parameter(torch.zeros(self.nb_tasks).to(device))
         #print(self.nb_tasks)
         #print(self.named_parameters())
             
@@ -531,15 +532,15 @@ mlp_lab_o_size = 400
         task2loss = defaultdict(int)
 
         loss = torch.zeros(()).to(self.device)
-        #dyn_loss_weights = torch.exp( - self.log_sigma2 ) # if lsig2 is log(sigma2), then exp(-lsig2) = 1/sigma2
-        dyn_loss_weights = 1 / (self.sigma)**self.sigma_power 
+        dyn_loss_weights = torch.exp( - self.log_sigma_power ) # if log_sigma_power is log(sigma**power), then exp(-lsig**power) = 1/(sigma**power)
+        #dyn_loss_weights = 1 / (self.sigma)**self.sigma_power 
 
         # NB: all sents in batch start with the <root> tok (not padded)
         if 'a' in self.task2i:
           arc_loss = self.arc_loss(S_arc, arc_adja, pad_masks, self.pos_neg_weights)
           ti = self.task2i['a']
           task2loss['a'] = arc_loss.item()
-          loss +=  (dyn_loss_weights[ti] * arc_loss) + self.sigma[ti]
+          loss +=  (dyn_loss_weights[ti] * arc_loss) + self.log_sigma_power[ti]/self.sigma_power
 
         if 'l' in self.task2i:
           # --- Label loss -------------------------
@@ -558,13 +559,13 @@ mlp_lab_o_size = 400
           lab_loss = self.ce_loss(s_labels, g_labels) 
           ti = self.task2i['l']
           task2loss['l'] = lab_loss.item()
-          loss +=  (dyn_loss_weights[ti] * lab_loss) + self.sigma[ti]
+          loss +=  (dyn_loss_weights[ti] * lab_loss) + self.log_sigma_power[ti]/self.sigma_power
         
         if 'dpa' in self.task2i:
           dpa_arc_loss = self.arc_loss(S_dpa_arc, arc_adja, pad_masks, self.pos_neg_weights)
           ti = self.task2i['dpa']
           task2loss['dpa'] = dpa_arc_loss.item()
-          loss +=  (dyn_loss_weights[ti] * dpa_arc_loss) + self.sigma[ti]
+          loss +=  (dyn_loss_weights[ti] * dpa_arc_loss) + self.log_sigma_power[ti]/self.sigma_power
             
         # auxiliary tasks
         if 'h' in self.task2i:
@@ -573,7 +574,7 @@ mlp_lab_o_size = 400
           loss_h = self.mse_loss_with_mask(log_pred_nbheads, log_gold_nbheads, linear_pad_mask)
           task2loss['h'] = loss_h.item()
           ti = self.task2i['h']
-          loss +=  (dyn_loss_weights[ti] * loss_h) + self.sigma[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_h) + self.log_sigma_power[ti]/self.sigma_power
         else:
           gold_nbheads = None
 
@@ -602,7 +603,7 @@ mlp_lab_o_size = 400
 
           task2loss['scorearcnbh'] = loss_scorearcnbh.item()
           ti = self.task2i['scorearcnbh']
-          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbh) + self.sigma[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbh) + self.log_sigma_power[ti]/self.sigma_power
         else:
           S_arc_sigmoid_gold_arcs = None
 
@@ -612,7 +613,7 @@ mlp_lab_o_size = 400
           loss_d = self.mse_loss_with_mask(log_pred_nbdeps, log_gold_nbdeps, linear_pad_mask)
           task2loss['d'] = loss_d.item()
           ti = self.task2i['d']
-          loss +=  (dyn_loss_weights[ti] * loss_d) + self.sigma[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_d) + self.log_sigma_power[ti]/self.sigma_power
         else:
           gold_nbdeps = None
 
@@ -639,7 +640,7 @@ mlp_lab_o_size = 400
             
           task2loss['scorearcnbd'] = loss_scorearcnbd.item()
           ti = self.task2i['scorearcnbd']
-          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbd) + self.sigma[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbd) + self.log_sigma_power[ti]/self.sigma_power
           
 #        # predicted global balance in each sentence, between the predicted nbheads and the predicted nbdeps
 #        # which should be 0
@@ -651,7 +652,7 @@ mlp_lab_o_size = 400
 #          loss_global = (nb_toks / batch_size) * self.mse_loss(pred_h_d_per_sentence, gold_h_d_per_sentence)
 #          task2loss['g'] = loss_global.item()
 #          ti = self.task2i['g']
-#          loss +=  (dyn_loss_weights[ti] * loss_global) + self.sigma[ti]
+#          loss +=  (dyn_loss_weights[ti] * loss_global) + self.log_sigma_power[ti]/self.sigma_power
 
         if 'b' in self.task2i:
           # unfortunately, bincount on 1-d tensors only 
@@ -665,14 +666,14 @@ mlp_lab_o_size = 400
                                       torch.flatten(linear_pad_mask, start_dim=0, end_dim=1))
           task2loss['b'] = loss_bol.item()
           ti = self.task2i['b']
-          loss +=  (dyn_loss_weights[ti] * loss_bol) + self.sigma[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_bol) + self.log_sigma_power[ti]/self.sigma_power
 
         if 's' in self.task2i:
           loss_slabseq = self.ce_loss(torch.flatten(scores_slabseqs, start_dim=0, end_dim=1),
                                       torch.flatten(slabseqs, start_dim=0, end_dim=1))
           task2loss['s'] = loss_slabseq.item()
           ti = self.task2i['s']
-          loss +=  (dyn_loss_weights[ti] * loss_slabseq) + self.sigma[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_slabseq) + self.log_sigma_power[ti]/self.sigma_power
 
         if log_stream != None:
           for ti, task in enumerate(self.tasks):
