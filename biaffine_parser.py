@@ -104,7 +104,7 @@ mlp_lab_o_size = 400
             bert_model = AutoModel.from_pretrained(bert_name,return_dict=True)
         self.bert_subword_strategy = indices.bert_subword_strategy
 
-        self.sigma_power = 1 # to log the debug
+        self.sigma_power = 1 # (1/sigma**sigma_power)*loss + sigma (no log anymore)
 
         # indices for tasks
         self.tasks = sorted(tasks)
@@ -1035,12 +1035,12 @@ mlp_lab_o_size = 400
             # training mode (certain modules behave differently in train / eval mode)
             self.train()
             train_data.lex_dropout(lex_dropout) 
-            trace_first = True
+            first = True
             for batch in train_data.make_batches(self.batch_size, shuffle_data=True, sort_dec_length=True, shuffle_batches=True):
                 self.zero_grad()
-
-                loss, task2loss, task2nbcorrect, nb_toks = self.batch_forward_and_loss(batch, trace_first=trace_first)
-                trace_first = False
+                s = log_stream if first else None
+                loss, task2loss, task2nbcorrect, nb_toks = self.batch_forward_and_loss(batch, log_stream=s)
+                first = False
                 
                 loss.backward()
                 optimizer.step() 
@@ -1074,9 +1074,11 @@ mlp_lab_o_size = 400
                 self.eval()
                 # calcul de la perte sur le validation set
                 with torch.no_grad():
-                    trace_first = True
+                    first = True
                     for batch in val_data.make_batches(self.batch_size, sort_dec_length=True):
-                        loss, task2loss, task2nbcorrect, nb_toks = self.batch_forward_and_loss(batch, trace_first=trace_first, make_alt_preds=True)
+                        s = log_stream if first else None
+                        first = False
+                        loss, task2loss, task2nbcorrect, nb_toks = self.batch_forward_and_loss(batch, log_stream=s, make_alt_preds=True)
                         val_loss += loss.item()
                         val_nb_toks += nb_toks
                         for k in task2nbcorrect:
@@ -1090,8 +1092,6 @@ mlp_lab_o_size = 400
                         for k in task2loss:
                           val_task2loss[k] += task2loss[k]
 
-                        trace_first = False
-                        
                     # for one epoch
                     print("Val: nb toks " + str(val_nb_toks) + "/ " + " / ".join([t.upper()+":"+str(val_task2nbcorrect[t]) for t in self.tasks]))              
                     assert val_nb_toks == val_data.nb_words, "val_nb_toks %d should equal val_data.nb_words %d" %(val_nb_toks, val_data.nb_words)
