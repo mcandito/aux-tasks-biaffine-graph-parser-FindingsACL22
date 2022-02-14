@@ -543,7 +543,7 @@ mlp_lab_o_size = 400
         if self.dyn_weighting == 's2':
             dyn_loss_add = self.sigma**2
             dyn_loss_weights = 1 / dyn_loss_add
-        elif self.dyn_weighting == 'log_s2':
+        elif self.dyn_weighting in ['log_s2', 'aux_only']:
             dyn_loss_add = 2 * torch.log(self.sigma)
             dyn_loss_weights = 1/(self.sigma)**2
             #@@dyn_loss_weights = torch.exp( - self.log_sigma_power ) # if log_sigma_power is log(sigma**power), then exp(-lsig**power) = 1/(sigma**power)
@@ -578,9 +578,12 @@ mlp_lab_o_size = 400
           g_labels = torch.flatten(lab_adja) # [b, h, d] ==> [b * h * d]
 
           # loss with ignore_index == 0 (=> ignore padded arcs and non-gold arcs, which don't have gold labels anyway)
-          # cf. Dozat et al. 2018 "back-propagating error to the labeler only through edges with a non-null gold label"
-          lab_loss = self.ce_loss(s_labels, g_labels) 
-          ti = self.task2i['l']
+          # cf. Dozat et al. 2018 "back-propagating error to the labeler only through edges with a non-null gold label"          
+          lab_loss = self.ce_loss(s_labels, g_labels)
+          if self.dyn_weighting == 'aux_only': # if aux only dynamic weighting: weight of a == weight of l task
+            ti = self.task2i['a']
+          else:
+            ti = self.task2i['l']
           task2loss['l'] = lab_loss.item()
           loss +=  (dyn_loss_weights[ti] * lab_loss) + dyn_loss_add[ti]
         
