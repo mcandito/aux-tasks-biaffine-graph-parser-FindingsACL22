@@ -563,7 +563,7 @@ mlp_lab_o_size = 400
           #@@ (does not work well with frozen bert)
           #@@loss +=  (dyn_loss_weights[ti] * arc_loss) + self.log_sigma_power[ti]*alpha
           #@@loss +=  arc_loss
-          loss +=  (dyn_loss_weights[ti] * arc_loss) + self.dyn_loss_add[ti]
+          loss +=  (dyn_loss_weights[ti] * arc_loss) + dyn_loss_add[ti]
 
         if 'l' in self.task2i:
           # --- Label loss -------------------------
@@ -597,7 +597,7 @@ mlp_lab_o_size = 400
           loss_h = self.mse_loss_with_mask(log_pred_nbheads, log_gold_nbheads, linear_pad_mask)
           task2loss['h'] = loss_h.item()
           ti = self.task2i['h']
-          loss +=  (dyn_loss_weights[ti] * loss_h) + self.dyn_loss_add[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_h) + dyn_loss_add[ti]
         else:
           gold_nbheads = None
 
@@ -626,7 +626,7 @@ mlp_lab_o_size = 400
 
           task2loss['scorearcnbh'] = loss_scorearcnbh.item()
           ti = self.task2i['scorearcnbh']
-          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbh) + self.dyn_loss_add[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbh) + dyn_loss_add[ti]
         else:
           S_arc_sigmoid_gold_arcs = None
 
@@ -636,7 +636,7 @@ mlp_lab_o_size = 400
           loss_d = self.mse_loss_with_mask(log_pred_nbdeps, log_gold_nbdeps, linear_pad_mask)
           task2loss['d'] = loss_d.item()
           ti = self.task2i['d']
-          loss +=  (dyn_loss_weights[ti] * loss_d) + self.dyn_loss_add[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_d) + dyn_loss_add[ti]
         else:
           gold_nbdeps = None
 
@@ -663,7 +663,7 @@ mlp_lab_o_size = 400
             
           task2loss['scorearcnbd'] = loss_scorearcnbd.item()
           ti = self.task2i['scorearcnbd']
-          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbd) + self.dyn_loss_add[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_scorearcnbd) + dyn_loss_add[ti]
           
 #        # predicted global balance in each sentence, between the predicted nbheads and the predicted nbdeps
 #        # which should be 0
@@ -675,7 +675,7 @@ mlp_lab_o_size = 400
 #          loss_global = (nb_toks / batch_size) * self.mse_loss(pred_h_d_per_sentence, gold_h_d_per_sentence)
 #          task2loss['g'] = loss_global.item()
 #          ti = self.task2i['g']
-#          loss +=  (dyn_loss_weights[ti] * loss_global) + self.dyn_loss_add[ti]
+#          loss +=  (dyn_loss_weights[ti] * loss_global) + dyn_loss_add[ti]
 
         if 'b' in self.task2i:
           # unfortunately, bincount on 1-d tensors only 
@@ -689,14 +689,14 @@ mlp_lab_o_size = 400
                                       torch.flatten(linear_pad_mask, start_dim=0, end_dim=1))
           task2loss['b'] = loss_bol.item()
           ti = self.task2i['b']
-          loss +=  (dyn_loss_weights[ti] * loss_bol) + self.dyn_loss_add[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_bol) + dyn_loss_add[ti]
 
         if 's' in self.task2i:
           loss_slabseq = self.ce_loss(torch.flatten(scores_slabseqs, start_dim=0, end_dim=1),
                                       torch.flatten(slabseqs, start_dim=0, end_dim=1))
           task2loss['s'] = loss_slabseq.item()
           ti = self.task2i['s']
-          loss +=  (dyn_loss_weights[ti] * loss_slabseq) + self.dyn_loss_add[ti]
+          loss +=  (dyn_loss_weights[ti] * loss_slabseq) + dyn_loss_add[ti]
 
         if log_stream != None:
           for ti, task in enumerate(self.tasks):
