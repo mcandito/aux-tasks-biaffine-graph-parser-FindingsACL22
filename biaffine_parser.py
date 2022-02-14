@@ -123,6 +123,7 @@ mlp_lab_o_size = 400
         # log of variance set to zero (<=> variance == 1)
         # (important to put the tensor on the right device BEFORE instantiating a nn.Parameter)
         #@@self.sigma_power = sigma_power # (1/sigma**sigma_power)*loss + log(sigma)/sigma_power
+        self.dyn_weighting = dyn_weighting
         # whether to learn task weights, or use no weight at all
         if self.dyn_weighting != 'none':
             #self.sigma = nn.Parameter(torch.zeros(self.nb_tasks).to(device))
