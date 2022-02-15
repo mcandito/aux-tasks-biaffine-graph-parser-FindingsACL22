@@ -76,8 +76,8 @@ mlp_lab_o_size = 400
                  bert_name=None,   # caution: should match with indices.bert_tokenizer
                  reduced_bert_size=0,
                  freeze_bert=False,
-                 dyn_weighting='none', # none, s2, log_s2
-                 #sigma_power=2, # power for task weighting, use 0 to disable
+                 dyn_weighting='none', # none, s2, log_s2, aux_only,
+                 C=1.0, 
                  mtl_sharing_level=1, # levels of parameter sharing in mtl 1: bert+lstm only, 2: best+lstm+mlp
                  # output of aux task used as input features for tasks A / L
                  coeff_aux_task_as_input={}, # {'s':5, 'h':20},
@@ -124,6 +124,7 @@ mlp_lab_o_size = 400
         # (important to put the tensor on the right device BEFORE instantiating a nn.Parameter)
         #@@self.sigma_power = sigma_power # (1/sigma**sigma_power)*loss + log(sigma)/sigma_power
         self.dyn_weighting = dyn_weighting
+        self.C = C
         # whether to learn task weights, or use no weight at all
         if self.dyn_weighting != 'none':
             #self.sigma = nn.Parameter(torch.zeros(self.nb_tasks).to(device))
@@ -540,10 +541,11 @@ mlp_lab_o_size = 400
         task2loss = defaultdict(int)
 
         loss = torch.zeros(()).to(self.device)
-        if self.dyn_weighting == 's2':
+        if self.dyn_weighting in ['s2', 'aux_only']:
             dyn_loss_add = self.sigma**2
             dyn_loss_weights = 1 / dyn_loss_add
-        elif self.dyn_weighting in ['log_s2', 'aux_only']:
+            dyn_loss_add = self.C * dyn_loss_add
+        elif self.dyn_weighting == 'log_s2':
             dyn_loss_add = 2 * torch.log(self.sigma)
             dyn_loss_weights = 1/(self.sigma)**2
             #@@dyn_loss_weights = torch.exp( - self.log_sigma_power ) # if log_sigma_power is log(sigma**power), then exp(-lsig**power) = 1/(sigma**power)
@@ -1199,6 +1201,7 @@ mlp_lab_o_size = 400
 
     def log_perf(self, outstream, epoch, ctype, l, task2loss, task2accs):
         for stream in [sys.stdout, outstream]:
+          stream.write("CORPUS %s\n" % self.data_name)
           stream.write("%s   Loss  for epoch %d: %.4f\n" % (ctype, epoch, l))
           for k in sorted(task2loss.keys()):
             stream.write("%s %s Loss  for epoch %d: %.4f\n" % (ctype, k.upper(), epoch, task2loss[k]))
@@ -1232,7 +1235,7 @@ mlp_lab_o_size = 400
             self.log_values_suff = 'graph\t'
         else:
             self.log_values_suff = 'tree\t'
-        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style', 'mlp_lab_o_size', 'mlp_lab_dropout', 'bert_subword_strategy','dyn_weighting']
+        featnames = ['data_name', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'reduced_bert_size', 'freeze_bert', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'aux_hidden_size', 'batch_size', 'beta1','beta2','lr', 'nb_epochs', 'lex_dropout', 'mtl_sharing_level', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style', 'mlp_lab_o_size', 'mlp_lab_dropout', 'bert_subword_strategy','dyn_weighting','C']
 
         featvals = [ str(self.__dict__[f]) for f in featnames ]
 
@@ -1253,7 +1256,7 @@ mlp_lab_o_size = 400
         for h in ['model_file', 'w_emb_size', 'use_pretrained_w_emb', 'l_emb_size', 'p_emb_size', 'bert_name', 'bert_subword_strategy', 'reduced_bert_size', 'lstm_h_size', 'lstm_dropout', 'mlp_arc_o_size','mlp_arc_dropout', 'mlp_lab_o_size', 'mlp_lab_dropout', 'aux_hidden_size', 'mtl_sharing_level', 'coeff_aux_task_as_input', 'coeff_aux_task_stack_propag']:
           outstream.write("# %s : %s\n" %(h, str(self.__dict__[h])))
         outstream.write("\n")
-        for h in ['graph_mode', 'batch_size', 'beta1','beta2','lr','lex_dropout', 'freeze_bert', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style', 'dyn_weighting']:
+        for h in ['graph_mode', 'batch_size', 'beta1','beta2','lr','lex_dropout', 'freeze_bert', 'arc_loss_type', 'min_margin', 'margin_alpha', 'use_dyn_weights_pos_neg','early_stopping_style', 'dyn_weighting','C']:
           outstream.write("# %s : %s\n" %(h, str(self.__dict__[h])))
         for k in self.tasks:
           outstream.write("task %s\n" % k)          
