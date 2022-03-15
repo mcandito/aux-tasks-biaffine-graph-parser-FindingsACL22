@@ -1,4 +1,4 @@
-# biaffine-graph-parser
+# aux-tasks-biaffine-graph-parser
 
 Source code for the paper "Auxiliary Tasks to Boost Biaffine Semantic Dependency Parsing" to appear in Findings of ACL 2022. Re-implementation of the biaffine parser for producing dependency graphs [(Dozat et al., 2018)](https://aclanthology.org/P18-2077/), with additional auxiliary tasks.
 
